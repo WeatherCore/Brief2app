@@ -1,0 +1,20 @@
+# Hierarchical · 软件交付多团队(LangGraph)—— 依赖
+# 安装: python3.12 -m venv .venv && .venv/bin/pip install -r requirements.txt
+
+# 图编排框架(用其核心 StateGraph 显式建分层图)
+langgraph==1.2.4
+# LangGraph 节点里调 LLM(OpenAI 兼容 → OpenRouter)
+langchain-openai==1.2.2
+
+# Web 服务
+fastapi==0.136.3
+uvicorn[standard]==0.49.0
+
+# 功能/性能测试:FastAPI TestClient 真打生成的 app(starlette TestClient 依赖 httpx)
+httpx==0.28.1
+# 代码审查:对生成代码做静态检查(py_compile 是标准库自带,pyflakes 补静态告警)
+pyflakes==3.2.0
+
+# 读 .env 配置
+python-dotenv==1.2.2
+
