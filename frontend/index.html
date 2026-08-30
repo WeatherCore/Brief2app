@@ -1,0 +1,540 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>hierarchical · 真·软件交付(LangGraph)</title>
+<style>
+  :root{--bg:#FAF9F5;--ink:#2B2723;--muted:#8A8178;--line:#E7E1D8;--accent:#D97757;--accent2:#C2613F;--ok:#4F9D69;--bad:#C0533B;--card:#FFF;--stage:#211C18;}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,"PingFang SC","Segoe UI",system-ui,sans-serif;font-size:13px}
+  .wrap{max-width:1280px;margin:0 auto;padding:16px 16px 26px}
+  .titlebox{background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px 15px;margin-bottom:13px}
+  h1{font-size:17px;margin:0 0 3px;font-weight:760}
+  .sub{color:var(--muted);font-size:11.5px;line-height:1.6;word-break:break-word}
+  code,.c{background:#F0EBE3;padding:1px 5px;border-radius:4px;color:var(--accent2);font-size:11px;font-family:ui-monospace,Menlo,monospace}
+  .app{display:grid;grid-template-columns:1fr 392px;gap:13px;align-items:start}
+  @media(max-width:920px){.app{grid-template-columns:1fr}}
+
+  /* 左侧多轮对话 */
+  .chatcol{background:var(--card);border:1px solid var(--line);border-radius:12px;display:flex;flex-direction:column;min-height:560px;overflow:hidden}
+  .chead{padding:9px 11px;border-bottom:1px solid var(--line);display:flex;gap:8px;align-items:center}
+  .chead select{flex:1;min-width:0;border:1.5px solid var(--line);border-radius:8px;padding:7px 9px;font-size:12px;background:#fff;color:var(--ink);outline:none}
+  .delbtn{border:1px solid var(--line);background:#fff;color:var(--muted);font-size:13px;padding:6px 9px;border-radius:8px;cursor:pointer;flex-shrink:0}
+  .delbtn:hover{border-color:var(--accent);color:var(--accent)}
+  .newbtn{border:0;background:var(--accent);color:#fff;font-size:11.5px;font-weight:660;padding:7px 11px;border-radius:8px;cursor:pointer;white-space:nowrap}
+  .thread{flex:1;overflow:auto;padding:12px 13px;max-height:600px}
+  .umsg{background:var(--accent);color:#fff;border-radius:11px 11px 3px 11px;padding:7px 11px;font-size:12.5px;max-width:82%;margin:0 0 10px auto;width:fit-content;word-break:break-word}
+  .sblock{background:#F7F3EC;border:1px solid var(--line);border-radius:11px 11px 11px 3px;padding:9px 11px;margin-bottom:14px}
+  .sblock .sh{font-size:11.5px;color:var(--accent2);font-weight:680;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;gap:6px}
+  .sh .acts{display:flex;gap:6px;align-items:center;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end}
+  .tgl,.dlbtn{border:1px solid var(--line);background:#fff;color:var(--muted);font-size:10.5px;font-weight:640;padding:3px 8px;border-radius:6px;cursor:pointer;white-space:nowrap}
+  .tgl:hover,.dlbtn:hover{border-color:var(--accent);color:var(--accent2)}
+  .dlbtn.brun{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .steps.collapsed{display:none}
+  .tstep{display:flex;gap:7px;align-items:flex-start;padding:5px 6px;border-radius:6px;cursor:pointer;font-size:12px;min-width:0;transition:.12s}
+  .tstep:hover{background:#fff}.tstep.cur{background:#fff;box-shadow:inset 3px 0 0 var(--accent)}
+  .tstep.lv1{margin-left:14px}.tstep.lv2{margin-left:30px}
+  .tstep .k{min-width:16px;flex-shrink:0}.tstep .x{flex:1;min-width:0;overflow:hidden}
+  .tstep .peek{color:var(--muted);font-size:10.5px;margin-top:1px;line-height:1.5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;word-break:break-word}
+  .tstep .tt{color:#b09c8c;font-size:10px;font-variant-numeric:tabular-nums;background:#f0ebe3;padding:0 5px;border-radius:4px;margin-left:4px}
+  .brief.md{margin-top:8px;background:#fff;border:1px solid var(--line);border-radius:9px;padding:9px 11px;font-size:12px;line-height:1.65;word-break:break-word;color:#3a342e;cursor:pointer;max-height:200px;overflow:auto}
+  .brief.md:hover{border-color:var(--accent)}
+  .inputbar{border-top:1px solid var(--line);padding:9px;display:flex;gap:8px}
+  .inputbar input{flex:1;min-width:0;border:1.5px solid var(--line);border-radius:9px;padding:9px 11px;font-size:13px;outline:none}
+  .inputbar input:focus{border-color:var(--accent)}
+  .inputbar button{border:0;background:var(--accent);color:#fff;font-weight:680;padding:0 16px;border-radius:9px;cursor:pointer}
+  .inputbar button:disabled{opacity:.45}
+  .memnote{font-size:10.5px;color:var(--accent2);padding:0 11px 7px;word-break:break-word}
+
+  /* 右侧:组长树动画 + 内容 */
+  .rightcol{display:flex;flex-direction:column;gap:11px;position:sticky;top:12px}
+  .anim{background:var(--stage);border-radius:12px;padding:11px 11px 13px}
+  .ahead{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:9px}
+  .ahead .t{color:#e8d9c9;font-size:10.5px;font-weight:620;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.ahead .t b{color:#fff}
+  .zoombtn{background:#ffffff14;color:#f0e6da;border:1px solid #ffffff22;border-radius:7px;padding:4px 10px;font-size:11px;cursor:pointer;white-space:nowrap;flex-shrink:0}
+  .zoombtn:hover{background:#ffffff26;border-color:var(--accent)}
+  .cto{background:#2e2620;border:2px solid #6b5947;border-radius:10px;padding:7px 11px;text-align:center;cursor:pointer;transition:.25s;max-width:240px;margin:0 auto}
+  .cto:hover{border-color:#a98}.cto .role{color:#e8d9c9;font-size:9.5px}.cto .nm{color:#fff;font-size:13px;font-weight:740;margin-top:1px}
+  .cto.live{border-color:var(--accent);box-shadow:0 0 0 3px #d9775733,0 0 16px #d9775755}
+  .cto.synth{border-color:var(--ok);box-shadow:0 0 0 3px #4f9d6933}
+  .trunk{width:2px;height:12px;background:#4b3f35;margin:2px auto}.trunk.act{background:var(--accent)}
+  .connlabel{text-align:center;color:#e8a98e;font-size:10px;font-weight:640;min-height:14px;margin:1px 0;word-break:break-word}
+  .connlabel.up{color:#86c79a}
+  /* 三个团队容器:外框是团队边界,组长和工程师都作为独立 agent 卡片存在 */
+  .leads{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:2px;align-items:stretch}
+  .lead{background:#241d18;border:2px dashed #4b3f35;border-radius:11px;padding:6px;transition:.28s;opacity:.62;min-width:0;position:relative}
+  .lead::before{content:"团队边界";position:absolute;top:-8px;left:9px;background:var(--stage);color:#9a8d80;font-size:8px;padding:0 5px;letter-spacing:.02em}
+  .lead.live{opacity:1;border-style:solid;border-color:var(--accent);box-shadow:0 0 0 2px #d9775730,0 0 14px #d9775755}
+  .lead.done{opacity:1;border-style:solid;border-color:var(--ok);box-shadow:0 0 0 2px #4f9d6926}
+  .lead.cur{outline:2px solid #ffd9c8;outline-offset:2px}
+  .lhd{position:relative;display:grid;grid-template-columns:auto 1fr auto;align-items:end;gap:5px;margin:6px 0 6px;cursor:pointer;background:#332a23;border:1.5px solid #5a4a3c;border-radius:8px;padding:14px 6px 6px;box-shadow:inset 0 0 0 1px #ffffff0a;min-height:48px}
+  .lhd::before{content:"组长 agent";position:absolute;top:3px;left:7px;color:#cdbfb2;font-size:8px;font-weight:760;letter-spacing:.02em}
+  .lhd:hover{border-color:#a98}
+  .lhd .ic{font-size:16px;line-height:1}.lhd .lb{color:#f3e9df;font-size:11.5px;font-weight:780;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .lhd .st{font-size:8.5px;color:#9a8d80;font-weight:700;white-space:nowrap}
+  .lead.live .lhd{border-color:var(--accent);box-shadow:0 0 0 2px #d9775730,0 0 10px #d9775745}.lead.done .lhd{border-color:var(--ok);box-shadow:0 0 0 2px #4f9d6926}
+  .lead.live .lhd .st{color:var(--accent)}.lead.done .lhd .st{color:#79c98f}
+  .lworkers{display:flex;flex-direction:column;gap:4px;border:1px solid #44382f;border-radius:8px;padding:5px;background:#211b16}
+  .wcap{font-size:8.5px;color:#9a8d80;font-weight:700;text-align:center;margin-bottom:1px}
+  .worker{display:flex;align-items:center;gap:5px;background:#332a23;border:1.5px solid #4b3f35;border-radius:7px;padding:4px 6px;transition:.25s;opacity:.66;min-width:0;cursor:pointer}
+  .worker:hover{border-color:#a98}
+  .worker.live{opacity:1;border-color:var(--accent);box-shadow:0 0 8px #d9775744;animation:wpulse 1s ease-in-out infinite}
+  .worker.done{opacity:1;border-color:var(--ok)}
+  .worker.cur{outline:2px solid #ffd9c8;outline-offset:1px}
+  @keyframes wpulse{0%,100%{transform:translateX(0)}50%{transform:translateX(2px)}}
+  .worker .wlb{flex:1;min-width:0;color:#e8ddd2;font-size:10.5px;font-weight:620;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .worker .wst{font-size:9px;flex-shrink:0;color:#9a8d80}.worker.live .wst{color:var(--accent)}.worker.done .wst{color:#79c98f}
+  .ctrl{display:flex;align-items:center;gap:5px;margin-top:11px}
+  .ctrl button{flex:1;background:#ffffff14;color:#f0e6da;border:1px solid #ffffff22;border-radius:7px;padding:6px 3px;font-size:11px;cursor:pointer}
+  .ctrl button:hover{background:#ffffff26}.ctrl button:disabled{opacity:.35;cursor:not-allowed}
+  .si{color:#cdbfb2;font-size:10px;text-align:center;margin-top:5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+  /* 内容卡片 + tab */
+  .content{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px 12px;min-height:170px}
+  .tabbar{display:flex;gap:5px;align-items:center;border-bottom:1px solid var(--line);margin:-2px -2px 9px;padding-bottom:7px;flex-wrap:wrap}
+  .tab{border:1px solid var(--line);background:#fff;color:var(--muted);font-size:11px;font-weight:640;padding:5px 9px;border-radius:7px;cursor:pointer}
+  .tab.active{background:#F2EDE4;color:var(--accent2);border-color:var(--accent)}
+  .launch{margin-left:auto;border:0;background:var(--accent);color:#fff;font-size:11.5px;font-weight:700;padding:6px 12px;border-radius:8px;cursor:pointer}
+  .launch:hover{background:var(--accent2)}
+  .content .ch{font-size:12px;color:var(--accent2);font-weight:680;margin-bottom:5px;word-break:break-word}
+  .content .sub2{color:var(--muted);font-size:10.5px;margin-bottom:6px;word-break:break-all}
+  .content .ph{color:var(--muted);font-size:11.5px;line-height:1.65;padding:6px 2px}
+  .content .md{max-height:330px;overflow:auto;padding-right:4px}
+  .contract{background:#FAF6EF;border:1px dashed var(--line);border-radius:8px;padding:7px 10px;margin-top:7px;font-size:11.5px}
+  .bad{color:var(--bad);font-weight:600}.ok{color:var(--ok);font-weight:700}
+  .codepre{white-space:pre-wrap;word-break:break-word;background:#FAF8F4;border:1px solid var(--line);border-radius:8px;padding:9px 11px;font-size:11px;line-height:1.55;margin:0;font-family:ui-monospace,Menlo,monospace;max-height:330px;overflow:auto}
+  .promptbox{border:1px solid var(--line);border-radius:8px;background:#fff;margin:7px 0;overflow:hidden}
+  .promptbox summary{cursor:pointer;color:var(--accent2);font-weight:700;font-size:11.5px;padding:7px 9px;background:#FFFBF7}
+  .promptbox pre{border:0;border-top:1px solid var(--line);border-radius:0;max-height:260px}
+  .seedfiles{font-size:11.5px;line-height:1.8;background:#fff;border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+  .diffpre .diff-add{color:#2f7d4f;background:#eaf6ee;display:block}
+  .diffpre .diff-del{color:#b5402c;background:#fbeae6;display:block}
+  .diffpre .diff-hunk{color:#9a6bb0;display:block}
+  .diffpre .diff-meta{color:#9a8d80;display:block}
+  .diffpre .diff-ctx{color:#5a544d;display:block}
+  /* 文件面板:文件夹树 */
+  .filetree{font-size:12px;border:1px solid var(--line);border-radius:9px;padding:8px 6px;background:#fff}
+  .ft-root{font-weight:700;color:var(--accent2);padding:3px 6px;font-family:ui-monospace,Menlo,monospace;font-size:11.5px;word-break:break-all}
+  .ft-dir{color:#6b5f54;font-weight:640;padding:4px 6px;padding-left:calc(var(--d,1)*18px)}
+  .ft-file{display:flex;justify-content:space-between;align-items:center;gap:8px;cursor:pointer;border-radius:7px;padding:5px 8px;padding-left:calc(var(--d,1)*18px + 6px);transition:.12s}
+  .ft-file:hover{background:#FFFBF7;box-shadow:inset 2px 0 0 var(--accent)}
+  .ftf-n{font-weight:620;color:var(--ink)}
+  .ftf-m{font-size:10px;color:var(--muted);white-space:nowrap;flex-shrink:0}
+  /* 测试面板 */
+  .testcard{border:1px solid var(--line);border-radius:9px;padding:9px 11px;margin-bottom:9px;background:#fff}
+  .tc-h{font-size:12px;font-weight:700;color:var(--accent2);margin-bottom:6px}
+  .tc-static{font-size:11.5px;line-height:1.7;margin-bottom:5px}
+  .checks{font-size:11.5px;line-height:1.85}
+  .perf{font-size:12px;line-height:1.7}.perf b{color:var(--accent2)}
+
+  .modal{position:fixed;inset:0;background:#211c1899;display:none;align-items:center;justify-content:center;z-index:9;padding:18px}
+  .modal.show{display:flex}
+  .mbox{background:#fff;border-radius:13px;max-width:600px;width:100%;max-height:86vh;overflow:auto;padding:18px 20px;position:relative}
+  .mbox h3{margin:0 0 3px;font-size:15px}.mbox .role{color:var(--muted);font-size:12px;margin-bottom:10px;word-break:break-all}
+  .mbox h4{margin:13px 0 6px;font-size:12.5px;color:var(--accent2)}
+  .mbox pre{white-space:pre-wrap;word-break:break-word;background:#FAF8F4;border:1px solid var(--line);border-radius:8px;padding:11px;font-size:12px;line-height:1.6;margin:0;font-family:inherit}
+  .mclose{position:absolute;top:14px;right:16px;border:0;background:#F0EBE3;border-radius:7px;width:28px;height:28px;cursor:pointer;font-size:15px;z-index:2}
+  .tooldef{border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin-bottom:7px;background:#FFFBF7}
+  .tooldef .tn{font-size:12.5px;font-weight:700}
+  .tooldef .tsig{margin:4px 0}.tooldef .tsig code{font-size:10.5px;word-break:break-all}
+  .tooldef .tdesc{font-size:11.5px;color:#5a544d;line-height:1.6}
+  #zoommodal .mbox{max-width:900px;height:86vh;max-height:880px;display:flex;flex-direction:column}
+  #zoommodal .ztree{flex-shrink:0}
+  .zcap{flex:1;min-height:90px;overflow:auto;margin-top:14px;background:#FAF8F4;border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .zcap-h{font-size:13.5px;font-weight:700;color:var(--accent2)}
+  .zcap-d{font-size:12px;color:#3a342e;line-height:1.6;margin-top:7px;word-break:break-word}
+  .zctrl{display:flex;align-items:center;justify-content:center;gap:14px;margin-top:14px;flex-shrink:0}
+  .zctrl button{background:var(--accent);color:#fff;border:0;border-radius:9px;padding:8px 18px;font-size:13px;font-weight:660;cursor:pointer}
+  .zctrl button:disabled{opacity:.4;cursor:not-allowed}
+  .zslider{width:100%;margin-top:10px;accent-color:var(--accent);cursor:pointer;flex-shrink:0}
+  .zstepi{font-size:12.5px;color:var(--muted);min-width:90px;text-align:center;font-variant-numeric:tabular-nums}
+  /* 文件弹窗 / 运行预览弹窗 */
+  #filemodal .mbox{max-width:880px;display:flex;flex-direction:column;max-height:88vh}
+  .ftabs{display:flex;gap:6px;margin:6px 0 9px}
+  .ftab{border:1px solid var(--line);background:#fff;color:var(--muted);font-size:11px;font-weight:640;padding:4px 10px;border-radius:7px;cursor:pointer}
+  .ftab.active{background:#F2EDE4;color:var(--accent2);border-color:var(--accent)}
+  #filemodal pre{flex:1;overflow:auto;max-height:64vh}
+  #runmodal .mbox{max-width:1040px;height:90vh;max-height:920px;display:flex;flex-direction:column}
+  .runframe{flex:1;width:100%;border:1px solid var(--line);border-radius:10px;background:#fff;margin-top:10px}
+  .runerr{background:#FAF8F4;border:1px solid var(--line);border-radius:10px;padding:12px;font-family:ui-monospace,Menlo,monospace;font-size:11px;white-space:pre-wrap;color:var(--bad);overflow:auto;margin-top:10px}
+  /* md */
+  .md{line-height:1.6}.md h1,.md h2,.md h3{font-size:14.5px;margin:9px 0 5px}.md h4,.md h5{font-size:12.8px;margin:8px 0 4px;color:var(--accent2)}
+  .md p{margin:4px 0;font-size:12.5px}.md ul,.md ol{margin:4px 0;padding-left:18px}.md li{font-size:12.5px;margin:2px 0}
+  .md hr{border:0;border-top:1px solid var(--line);margin:8px 0}.md code{background:#f0ebe3;padding:1px 5px;border-radius:4px;font-size:11.5px;color:var(--accent2)}
+  .md table{border-collapse:collapse;margin:8px 0;font-size:12px;width:100%;display:block;overflow-x:auto}
+  .md th,.md td{border:1px solid var(--line);padding:5px 8px;text-align:left;vertical-align:top}
+  .md th{background:#F2EDE4;color:var(--accent2);font-weight:700;white-space:nowrap}.md tbody tr:nth-child(even) td{background:#FBF9F5}
+  .md a{color:var(--accent2);text-decoration:underline;word-break:break-all}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="titlebox">
+    <h1>🏛 hierarchical · 真·软件交付</h1>
+    <div class="sub"><b>技术选型:</b> <b>LangGraph</b> <code>StateGraph</code> + LangChain/OpenRouter <b>deepseek</b> + FastAPI/SSE + SQLite 文件工作区 + uvicorn 预览。<b>架构模式:</b> 技术总监 → 前端/后端/测试组长 → 工程师 agent 的显式分层图,控制流由 StateGraph 边确定性派发,不是把下级 agent 当 tool 调用;工程师<b>真写代码文件</b>(路径 + diff),测试组<b>真跑功能/性能测试 + 代码审查</b>。<b>点节点</b>看系统提示词 + 真实工具列表。</div>
+  </div>
+  <div class="app">
+    <div class="chatcol">
+      <div class="chead"><select id="convsel"><option value="">— 当前新对话 —</option></select><button class="delbtn" id="delconv" title="删除选中历史">🗑</button><button class="newbtn" id="newconv">＋ 新对话</button></div>
+      <div class="thread" id="thread"></div>
+      <div class="memnote" id="memnote"></div>
+      <div class="inputbar"><input id="q" placeholder="输入软件需求(如:做个极简留言板),或对当前成果追问…"><button id="go">发送 ▶</button></div>
+    </div>
+    <div class="rightcol">
+      <div class="anim">
+        <div class="ahead"><div class="t">分层构建 · <b id="focusq">等待运行</b></div><button class="zoombtn" id="zoom">⤢ 放大</button></div>
+        <div id="stage"></div>
+        <div class="ctrl"><button id="prev" disabled>⏮ 上一步</button><button id="next" disabled>下一步 ⏭</button><button id="play" disabled>▶ 播放</button></div>
+        <div class="si" id="stepinfo">发送一个软件需求开始</div>
+      </div>
+      <div class="content">
+        <div class="tabbar">
+          <button class="tab active" data-tab="data">📂 流动数据</button>
+          <button class="tab" data-tab="files">🗂 产出文件<span id="filecount"></span></button>
+          <button class="tab" data-tab="tests">✅ 测试与审查</button>
+          <button class="launch" id="launchbtn" style="display:none">🚀 启动预览</button>
+        </div>
+        <div id="tab-data"><div class="ph">点左侧轨迹或用 ⏮ ⏭ 步进,这里显示该步真实流动的数据(派发任务 / 写文件 diff / 测试结果 / 交付计划)。</div></div>
+        <div id="tab-files" style="display:none"></div>
+        <div id="tab-tests" style="display:none"></div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="modal" id="modal"><div class="mbox" id="mbox"></div></div>
+<div class="modal" id="briefmodal"><div class="mbox" style="max-width:760px"><button class="mclose" onclick="closeBrief()">✕</button><h3>📋 交付计划 · 完整渲染</h3><div class="role" id="briefsub"></div><div class="md" id="briefbody"></div></div></div>
+<div class="modal" id="filemodal"><div class="mbox"><button class="mclose" onclick="closeFile()">✕</button>
+  <h3 id="filetitle"></h3><div class="role" id="filepath"></div>
+  <div class="ftabs"><button class="ftab active" id="ft-diff" onclick="showFileTab('diff')">变更 diff</button><button class="ftab" id="ft-full" onclick="showFileTab('full')">完整内容</button></div>
+  <pre class="codepre diffpre" id="filebody"></pre>
+</div></div>
+<div class="modal" id="runmodal"><div class="mbox"><button class="mclose" onclick="closeRun()">✕</button>
+  <h3>🚀 运行预览 · 留言板(uvicorn 真跑)</h3><div class="role" id="runinfo"></div>
+  <iframe id="runframe" class="runframe" style="display:none"></iframe>
+  <div class="runerr" id="runerr" style="display:none"></div>
+</div></div>
+<div class="modal" id="zoommodal"><div class="mbox"><button class="mclose" onclick="closeZoom()">✕</button>
+  <h3 id="zoomtitle">分层构建 · 放大</h3><div class="role">点 上一步/下一步 看每一步的控制流与真实数据</div>
+  <div class="ztree" id="ztree"></div>
+  <div class="zctrl"><button id="zprev">⏮ 上一步</button><span class="zstepi" id="zstep"></span><button id="znext">下一步 ⏭</button></div>
+  <input type="range" id="zslider" min="0" max="0" value="0" class="zslider">
+  <div class="zcap" id="zcap"></div>
+</div></div>
+
+<script>
+const $=s=>document.querySelector(s);
+const esc=s=>String(s==null?"":s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+function mdToHtml(md){
+  const lines=esc(md).split('\n');let h='',ul=false;
+  const inl=t=>t.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g,'<a href="$2" target="_blank">$1</a>').replace(/\*\*([^*]+)\*\*/g,'<b>$1</b>').replace(/`([^`]+)`/g,'<code>$1</code>');
+  const cells=ln=>ln.replace(/^\s*\|/,'').replace(/\|\s*$/,'').split('|').map(c=>c.trim());
+  const isSep=ln=>/\|/.test(ln)&&/-/.test(ln)&&/^[\s:|-]+$/.test(ln);
+  const cu=()=>{if(ul){h+='</ul>';ul=false;}};
+  for(let i=0;i<lines.length;i++){const ln=lines[i];
+    if(/\|/.test(ln)&&i+1<lines.length&&isSep(lines[i+1])){cu();let t='<table><thead><tr>'+cells(ln).map(c=>'<th>'+inl(c)+'</th>').join('')+'</tr></thead><tbody>';i+=2;while(i<lines.length&&/\|/.test(lines[i])&&lines[i].trim()){t+='<tr>'+cells(lines[i]).map(c=>'<td>'+inl(c)+'</td>').join('')+'</tr>';i++;}i--;h+=t+'</tbody></table>';continue;}
+    if(/^#{1,3} /.test(ln)){cu();h+='<h4>'+inl(ln.replace(/^#{1,3} /,''))+'</h4>';}
+    else if(/^\s*[-*] /.test(ln)){if(!ul){h+='<ul>';ul=true;}h+='<li>'+inl(ln.replace(/^\s*[-*] /,''))+'</li>';}
+    else if(/^\s*\d+\. /.test(ln)){if(!ul){h+='<ul>';ul=true;}h+='<li>'+inl(ln.replace(/^\s*\d+\.\s/,''))+'</li>';}
+    else if(/^\s*---+\s*$/.test(ln)){cu();h+='<hr>';}
+    else if(ln.trim()===''){cu();}
+    else{cu();h+='<p>'+inl(ln)+'</p>';}}
+  cu();return h;
+}
+function diffHtml(d){if(!d)return'<span class="diff-meta">(新建文件,无对比基线)</span>';
+  return esc(d).split('\n').map(l=>{
+    if(l.startsWith('+++')||l.startsWith('---'))return '<span class="diff-meta">'+l+'</span>';
+    if(l.startsWith('@@'))return '<span class="diff-hunk">'+l+'</span>';
+    if(l.startsWith('+'))return '<span class="diff-add">'+l+'</span>';
+    if(l.startsWith('-'))return '<span class="diff-del">'+l+'</span>';
+    return '<span class="diff-ctx">'+l+'</span>';
+  }).join('');
+}
+
+let LEADS=[];                       // 组织结构(来自 start 事件)
+let sessionId,agentsCache=null,focus=null,playTimer=null,busy=false;
+const threadEl=$("#thread");
+
+function findLead(id){return LEADS.find(L=>L.id===id);}
+function leadOf(name){for(const L of LEADS)for(const w of L.workers)if(w.name===name)return L.lead;return "组长";}
+function wlabel(name){for(const L of LEADS)for(const w of L.workers)if(w.name===name)return w.label;return name;}
+function actorLabel(e){if(e.worker)return wlabel(e.worker);if(e.lead==="cto")return"技术总监";const L=findLead(e.lead);return L?L.lead:(e.lead||"agent");}
+
+// ── 回放 events[0..idx],算每个节点状态 ──
+function computeState(events,idx){
+  const st={cto:"idle",leads:{},workers:{}};
+  for(const L of LEADS){st.leads[L.id]="idle";for(const w of L.workers)st.workers[w.name]="idle";}
+  let started=false;
+  for(let k=0;k<=idx&&k<events.length;k++){const e=events[k];
+    if(e.event==="start")started=true;
+    else if(e.event==="lead_dispatch")st.leads[e.lead]="live";
+    else if(e.event==="worker_dispatch")st.workers[e.worker]="live";
+    else if(e.event==="worker_done")st.workers[e.worker]="done";
+    else if(e.event==="lead_done")st.leads[e.lead]="done";
+    else if(e.event==="final")st.cto="synth";}
+  if(started&&st.cto==="idle")st.cto="live";
+  return st;
+}
+function curConn(e){
+  if(!e)return["",""];
+  if(e.event==="workspace_seeded")return["down","📂 继承上一版工作区"];
+  if(e.event==="prompt")return["down","🧠 "+actorLabel(e)+" 提示词"];
+  if(e.event==="llm_error")return["","⚠️ "+actorLabel(e)+" 文本生成降级"];
+  if(e.event==="contract")return["down","📜 技术总监 制定并下发契约"];
+  if(e.event==="lead_dispatch"){const L=findLead(e.lead);return["down","↓ 技术总监 派发给 "+(L?L.lead:e.lead)];}
+  if(e.event==="worker_dispatch")return["down","↓ "+leadOf(e.worker)+" 派给 "+wlabel(e.worker)];
+  if(e.event==="tool_call")return["down","🔧 "+wlabel(e.worker)+" 调用 "+e.tool];
+  if(e.event==="file_written")return["down","📝 "+wlabel(e.worker)+" 写出 "+e.relpath];
+  if(e.event==="tool_done")return["down","✅ "+wlabel(e.worker)+" 工具返回"];
+  if(e.event==="review_result")return["down","🔍 代码审查产出"];
+  if(e.event==="test_result")return["down",(e.kind==="perf"?"⚡ 性能":"🧪 功能")+"测试产出"];
+  if(e.event==="lead_check")return["",(e.lead==="cto"?"🔎 技术总监 验收":"🔎 "+((findLead(e.lead)||{}).lead||"组长")+" 自检")+(e.ok?" 通过":" 有待改进")];
+  if(e.event==="worker_done")return["up","↑ "+wlabel(e.worker)+" 交活"];
+  if(e.event==="lead_done"){const L=findLead(e.lead);return["up","↑ "+(L?L.lead:e.lead)+" 汇总回流 技术总监"];}
+  if(e.event==="final")return["up","↑ 技术总监 综合交付计划"];
+  return["",""];
+}
+function leadHtml(L,st,cur){
+  const ws=L.workers.map(w=>{const s=st.workers[w.name],isc=cur&&cur.worker===w.name;const stx={idle:"待命",live:"⚡",done:"✓"}[s];
+    return `<div class="worker ${s} ${isc?'cur':''}" onclick="showAgent('worker','${esc(w.name)}')"><div class="wlb">${esc(w.label)}</div><div class="wst">${stx}</div></div>`;}).join("");
+  const ls=st.leads[L.id],lisc=cur&&cur.lead===L.id&&!cur.worker;const lstx={idle:"待命",live:"进行中",done:"✓ 已交"}[ls];
+  return `<div class="lead ${ls} ${lisc?'cur':''}"><div class="lhd" onclick="showAgent('lead','${esc(L.id)}')"><span class="ic">${L.icon}</span><span class="lb">${esc(L.lead)}</span><span class="st">${lstx}</span></div><div class="lworkers"><div class="wcap">StateGraph 派发到工程师 agent</div>${ws}</div></div>`;
+}
+function renderTreeInto(el,events,idx){
+  if(!LEADS.length){el.innerHTML='<div class="ph" style="text-align:center;padding:18px;color:#9a8d80">发送一个软件需求开始</div>';return;}
+  const st=computeState(events,idx),cur=events[idx]||null;const[dir,lab]=curConn(cur);
+  el.innerHTML=
+    `<div class="cto ${st.cto}" onclick="showAgent('cto')"><div class="role">技术总监 · 顶层</div><div class="nm">研发交付总指挥</div></div>`+
+    `<div class="trunk ${dir?'act':''}"></div><div class="connlabel ${dir==='up'?'up':''}">${esc(lab)}</div>`+
+    `<div class="leads">${LEADS.map(L=>leadHtml(L,st,cur)).join("")}</div>`;
+}
+
+function promptHtml(e){
+  return `<details class="promptbox" open><summary>System Prompt</summary><pre class="codepre">${esc(e.system||"")}</pre></details>`+
+    `<details class="promptbox" open><summary>Human Prompt</summary><pre class="codepre">${esc(e.human||"")}</pre></details>`;
+}
+
+// ── 某一步的「头/副标题/正文 html」(数据 tab 与 zoom 共用)──
+function stepBody(e){
+  if(!e)return{head:"流动数据",sub:"",html:'<div class="ph">点轨迹或步进,查看每一步真实数据。</div>'};
+  const W=wlabel(e.worker);
+  switch(e.event){
+    case "start":return{head:"🚀 软件需求",sub:"技术总监 收到需求,准备下发接口契约",
+      html:`<div class="md"><p>${esc(e.topic||"")}</p></div>`+
+        (e.base_run_id?`<div class="contract">本轮基于上一版 <code>${esc(e.base_run_id)}</code> 修改,已继承 ${e.seeded_files&&e.seeded_files.length?e.seeded_files.length:0} 个源码文件。</div>`:"")+
+        (e.contract?`<div class="contract">${mdToHtml(e.contract)}</div>`:"")};
+    case "workspace_seeded":return{head:"📂 继承上一版工作区",sub:`上一版:${esc(e.base_run_id||"")}`,
+      html:`<div class="seedfiles">${(e.files||[]).map(f=>`<div>📄 <code>${esc(f.relpath)}</code> · ${f.bytes}B</div>`).join("")||"没有可继承的源码文件"}</div>`};
+    case "prompt":return{head:`🧠 ${esc(actorLabel(e))} 提示词`,sub:esc(e.phase||"LLM 调用"),html:promptHtml(e)};
+    case "llm_error":return{head:`⚠️ ${esc(actorLabel(e))} 文本生成降级`,sub:esc(e.phase||""),html:`<div class="bad">${esc(e.message||"")}</div>`};
+    case "contract":return{head:`📜 技术总监定契约 · ${esc(e.app_name||"")}`,sub:e.ok?"按需求动态制定的接口契约":"需求解析失败,已回退到默认契约",
+      html:`<div class="contract" style="white-space:pre-wrap">${esc(e.brief||"")}</div>`};
+    case "lead_rework":{const L=findLead(e.lead);return{head:`🔁 ${L?L.lead:e.lead} 打回重写(第 ${e.attempt} 次)`,sub:"自检未通过,工程师按反馈重写",
+      html:`<div class="checks">${(e.issues||[]).map(x=>`<div>✗ ${esc(x)}</div>`).join('')}</div>`};}
+    case "lead_dispatch":{const L=findLead(e.lead);return{head:`🏢 技术总监 → ${L?L.lead:e.lead}`,sub:"把活顺序交给该组长",
+      html:`<div class="ph">技术总监 把整体需求交给「${esc(L?L.lead:e.lead)}」,由组长拆给成员。</div>`};}
+    case "worker_dispatch":return{head:`🎯 ${leadOf(e.worker)} → ${W}`,sub:"组长把子任务派给成员",
+      html:`<div class="ph">「${esc(leadOf(e.worker))}」请「${esc(W)}」开工。</div>`};
+    case "tool_call":return{head:`🔧 ${W} 调用工具`,sub:"工具:"+esc(e.tool),
+      html:`<pre class="codepre">${esc(JSON.stringify(e.args||{},null,2))}</pre>`};
+    case "file_written":return{head:`📝 ${W} 写出 ${esc(e.relpath)}`,sub:`真落盘:${e.path||""}(${e.bytes} 字节)`,
+      html:`<pre class="codepre diffpre">${diffHtml(e.diff)}</pre>`};
+    case "tool_done":return{head:`✅ 工具返回`,sub:"工具:"+esc(e.tool),html:`<div class="ph">${esc(e.result||"")}</div>`};
+    case "worker_done":return{head:`🛠 ${W} 交活`,sub:"产出回到组长",html:`<div class="md">${mdToHtml(e.output||"")}</div>`};
+    case "review_result":{const sc=e.static||{};return{head:`🔍 代码审查`,sub:e.ok?"py_compile 编译通过":"py_compile 编译失败",
+      html:`<div class="tc-static">${(sc.files||[]).map(x=>`<div>${x.compile_ok?'✓':'✗'} <code>${esc(x.relpath)}</code>${x.issues&&x.issues.length?' — '+x.issues.map(i=>esc(i.msg)).join('; '):''}</div>`).join('')}</div><div class="md">${mdToHtml(e.review||"")}</div>`};}
+    case "test_result":{const r=e.result||{};if(e.kind==="perf")return{head:"⚡ 性能测试",sub:r.ok?"完成":"失败",
+        html:r.ok?`<div class="perf">共 ${r.n} 次 GET · 平均 <b>${r.avg_ms}ms</b> · p95 <b>${r.p95_ms}ms</b> · 最大 ${r.max_ms}ms</div>`:`<div class="bad">${esc(r.error||"")}</div>`};
+      return{head:"🧪 功能测试",sub:r.ok?"全部通过":"未通过",
+        html:`<div class="checks">${(r.checks||[]).map(c=>`<div>${c.pass?'✅':'❌'} ${esc(c.name)}</div>`).join('')}</div>${r.error?`<div class="bad">${esc(r.error)}</div>`:''}`};}
+    case "lead_check":{const who=e.lead==="cto"?"技术总监 验收":((findLead(e.lead)||{}).lead||"组长")+" 自检";
+      return{head:`🔎 ${who}`,sub:"工具:"+esc(e.tool)+" · "+(e.ok?"通过":"发现待改进项"),
+        html:`<div class="checks">${(e.checks||[]).map(c=>`<div>${c.pass?'✅':'❌'} ${esc(c.name)}</div>`).join('')}</div>`};}
+    case "lead_done":{const L=findLead(e.lead);return{head:`📦 ${L?L.lead:e.lead} 汇总`,sub:"本组产出回流 技术总监",html:`<div class="md">${mdToHtml(e.output||"")}</div>`};}
+    case "final":return{head:"📋 技术总监 交付计划",sub:"综合三组真实产物与质量结论",html:`<div class="md">${mdToHtml(e.brief||"")}</div>`};
+    case "error":return{head:"⚠️ 出错",sub:"",html:`<div class="bad">${esc(e.message||"")}</div>`};
+    default:return{head:e.event,sub:"",html:""};
+  }
+}
+function renderContent(e){const{head,sub,html}=stepBody(e);
+  $("#tab-data").innerHTML=`<div class="ch">${esc(head)}</div>${sub?`<div class="sub2">${esc(sub)}</div>`:""}${html}`;}
+
+// ── 产出文件 / 测试 两个聚合 tab ──
+function collectFiles(events){const m={};events.forEach(e=>{if(e.event==="file_written")m[e.relpath]=e;});return Object.values(m);}
+function renderFiles(){const el=$("#tab-files");if(!focus){el.innerHTML='<div class="ph">先跑一轮再看产出文件。</div>';$("#filecount").textContent="";return;}
+  const fs=collectFiles(focus.events);window.__files=fs;$("#filecount").textContent=fs.length?(" "+fs.length):"";
+  if(!fs.length){el.innerHTML='<div class="ph">本轮还没有产出文件。</div>';return;}
+  const root=[],byDir={};
+  fs.forEach((f,i)=>{const p=f.relpath.split('/');if(p.length===1)root.push({...f,idx:i,name:p[0]});else{const dir=p.slice(0,-1).join('/');(byDir[dir]=byDir[dir]||[]).push({...f,idx:i,name:p[p.length-1]});}});
+  const fileRow=(f,d)=>`<div class="ft-file" style="--d:${d}" onclick="openFile(${f.idx})"><span class="ftf-n">📄 ${esc(f.name)}</span><span class="ftf-m">${f.bytes}B · diff/内容 ▸</span></div>`;
+  let h=`<div class="filetree"><div class="ft-root">📁 workspace/${esc(focus.runId||"")}/</div>`;
+  root.forEach(f=>h+=fileRow(f,1));
+  Object.keys(byDir).sort().forEach(dir=>{h+=`<div class="ft-dir" style="--d:1">📁 ${esc(dir)}/</div>`;byDir[dir].forEach(f=>h+=fileRow(f,2));});
+  el.innerHTML=h+'</div>';
+}
+function renderTests(){const el=$("#tab-tests");if(!focus){el.innerHTML='<div class="ph">先跑一轮再看测试与审查。</div>';return;}
+  const evs=focus.events;let html="";
+  const rev=evs.find(e=>e.event==="review_result");
+  const func=evs.find(e=>e.event==="test_result"&&e.kind==="functional");
+  const perf=evs.find(e=>e.event==="test_result"&&e.kind==="perf");
+  if(rev){const sc=rev.static||{};html+=`<div class="testcard"><div class="tc-h">🔍 代码审查 · ${rev.ok?'<span class="ok">编译通过</span>':'<span class="bad">编译失败</span>'}</div>`+
+    `<div class="tc-static">${(sc.files||[]).map(x=>`<div>${x.compile_ok?'✓':'✗'} <code>${esc(x.relpath)}</code>${x.issues&&x.issues.length?' — '+x.issues.map(i=>esc(i.msg)).join('; '):''}</div>`).join('')}</div>`+
+    `<div class="md">${mdToHtml(rev.review||"")}</div></div>`;}
+  if(func){const r=func.result||{};html+=`<div class="testcard"><div class="tc-h">🧪 功能测试 · ${r.ok?'<span class="ok">全部通过</span>':'<span class="bad">未通过</span>'}</div>`+
+    `<div class="checks">${(r.checks||[]).map(c=>`<div>${c.pass?'✅':'❌'} ${esc(c.name)}</div>`).join('')}</div>${r.error?`<div class="bad">${esc(r.error)}</div>`:''}</div>`;}
+  if(perf){const r=perf.result||{};html+=`<div class="testcard"><div class="tc-h">⚡ 性能测试 · ${r.ok?'<span class="ok">完成</span>':'<span class="bad">失败</span>'}</div>`+
+    (r.ok?`<div class="perf">共 ${r.n} 次 GET /api/messages · 平均 <b>${r.avg_ms}ms</b> · p95 <b>${r.p95_ms}ms</b> · 最大 ${r.max_ms}ms</div>`:`<div class="bad">${esc(r.error||'')}</div>`)+`</div>`;}
+  el.innerHTML=html||'<div class="ph">本轮还没有测试结果。</div>';
+}
+function switchTab(name){["data","files","tests"].forEach(n=>{$("#tab-"+n).style.display=n===name?"":"none";});
+  document.querySelectorAll(".tabbar .tab").forEach(b=>b.classList.toggle("active",b.dataset.tab===name));
+  if(name==="files")renderFiles();if(name==="tests")renderTests();}
+
+// ── 文件弹窗 ──
+function openFile(i){const f=(window.__files||[])[i];if(!f)return;window.__curfile=f;
+  $("#filetitle").textContent="📄 "+f.relpath;$("#filepath").textContent=f.path||"";showFileTab('diff');$("#filemodal").classList.add("show");}
+function showFileTab(t){const f=window.__curfile;if(!f)return;
+  $("#ft-diff").classList.toggle("active",t==="diff");$("#ft-full").classList.toggle("active",t==="full");
+  const b=$("#filebody");b.classList.toggle("diffpre",t==="diff");
+  b.innerHTML=t==="diff"?diffHtml(f.diff):esc(f.content||"(无内容)");}
+function closeFile(){$("#filemodal").classList.remove("show");}
+$("#filemodal").onclick=e=>{if(e.target===$("#filemodal"))closeFile();};
+
+// ── 一键启动预览 ──
+async function launchPreview(runId){if(!runId){alert("没有可启动的构建(先跑一轮)");return;}
+  $("#runmodal").classList.add("show");$("#runinfo").textContent="⏳ 启动中…(首次启动要拉起 uvicorn,稍等几秒)";
+  $("#runframe").style.display="none";$("#runerr").style.display="none";
+  try{const r=await fetch("/api/launch?run_id="+encodeURIComponent(runId),{method:"POST"}).then(x=>x.json());
+    if(r.ok){$("#runinfo").innerHTML=`✅ 已启动:<a href="${r.url}" target="_blank">${r.url}</a> · PID ${r.pid||"-"}${r.reused?"(复用已起进程)":""} —— 下方 iframe 即真跑的留言板,可输入留言试试`;
+      $("#runframe").src=r.url;$("#runframe").style.display="";}
+    else{$("#runinfo").innerHTML='<span class="bad">❌ 启动失败</span>';$("#runerr").style.display="";$("#runerr").textContent=(r.error||"")+"\n\n"+(r.log||"");}
+  }catch(e){$("#runinfo").innerHTML='<span class="bad">❌ 请求失败:'+esc(e)+'</span>';}}
+function closeRun(){$("#runmodal").classList.remove("show");$("#runframe").src="about:blank";}
+$("#runmodal").onclick=e=>{if(e.target===$("#runmodal"))closeRun();};
+$("#launchbtn").onclick=()=>launchPreview(focus&&focus.runId);
+
+// ── 步进 / 焦点 ──
+function renderAnim(events,idx){renderTreeInto($("#stage"),events,idx);
+  $("#stepinfo").textContent=events.length?`步 ${idx+1}/${events.length} · ${stepDesc(events[idx])}`:"发送一个软件需求开始";}
+function stepDesc(e){if(!e)return"";const m={start:"技术总监 收到需求",workspace_seeded:"继承上一版源码",prompt:"查看提示词",llm_error:"文本生成降级",lead_dispatch:"技术总监 派发组长",worker_dispatch:"组长派发成员",tool_call:"成员调用工具",file_written:"写出代码文件",tool_done:"工具返回",worker_done:"成员交活",review_result:"代码审查",test_result:"测试结果",lead_check:"组长自检/验收",lead_rework:"打回重写",contract:"技术总监定契约",lead_done:"组长汇总回流",final:"技术总监 交付计划",error:"出错"};return m[e.event]||e.event;}
+function setFocus(events,idx,q,turnEl){
+  focus={events,idx,turnEl:turnEl||(focus&&focus.turnEl),runId:(events.find(e=>e.run_id)||{}).run_id};
+  if(q!=null)$("#focusq").textContent=q;
+  renderAnim(events,idx);renderContent(events[idx]);syncBtns();hl();
+  const hasFinal=events.some(e=>e.event==="final");$("#launchbtn").style.display=(hasFinal&&focus.runId)?"":"none";
+  const at=document.querySelector(".tabbar .tab.active");if(at){if(at.dataset.tab==="files")renderFiles();if(at.dataset.tab==="tests")renderTests();}
+  if($("#zoommodal").classList.contains("show"))renderZoom();}
+function syncBtns(){const on=!!focus&&!busy;$("#prev").disabled=!on||focus.idx<=0;$("#next").disabled=!on||focus.idx>=focus.events.length-1;$("#play").disabled=!on||focus.idx>=focus.events.length-1;}
+function gotoStep(i){if(!focus)return;focus.idx=Math.max(0,Math.min(i,focus.events.length-1));renderAnim(focus.events,focus.idx);renderContent(focus.events[focus.idx]);syncBtns();hl();if($("#zoommodal").classList.contains("show"))renderZoom();}
+function stepPrev(){if(focus)gotoStep(focus.idx-1);}function stepNext(){if(focus)gotoStep(focus.idx+1);}
+function play(){if(playTimer){clearInterval(playTimer);playTimer=null;$("#play").textContent="▶ 播放";return;}$("#play").textContent="⏸ 暂停";playTimer=setInterval(()=>{if(!focus||focus.idx>=focus.events.length-1){clearInterval(playTimer);playTimer=null;$("#play").textContent="▶ 播放";return;}stepNext();},750);}
+function hl(){document.querySelectorAll(".tstep.cur").forEach(el=>el.classList.remove("cur"));if(focus&&focus.turnEl){const s=focus.turnEl.querySelector(`[data-i="${focus.idx}"]`);if(s){s.classList.add("cur");const te=document.querySelector("#thread"),sr=s.getBoundingClientRect(),tr=te.getBoundingClientRect();if(sr.top<tr.top)te.scrollTop-=(tr.top-sr.top+8);else if(sr.bottom>tr.bottom)te.scrollTop+=(sr.bottom-tr.bottom+8);}}}
+
+// ── 点节点看系统提示词 + 工具列表 ──
+async function ensureAgents(){if(!agentsCache)agentsCache=await fetch("/api/agents").then(r=>r.json());return agentsCache;}
+async function showAgent(kind,id){const a=await ensureAgents();let title,role,system,tools=[],fileHtml="";
+  if(kind==="cto"){title="技术总监";role=a.cto.role;system=a.cto.system;tools=a.cto.tools||[];}
+  else if(kind==="lead"){const L=a.leads.find(x=>x.id===id);title=L.lead;role="组长 agent · StateGraph 节点;工程师由图边派发: "+L.workers.map(w=>w.label).join("、");system=L.lead_system;tools=L.tools||[];}
+  else{let w,L;for(const l of a.leads){const f=l.workers.find(x=>x.name===id);if(f){w=f;L=l;break;}}title=w.label;role=w.role+" · "+L.lead+"麾下";system=w.system;tools=w.tools||[];if(w.file)fileHtml=`<div class="role">产出文件:<code>${esc(w.file)}</code></div>`;}
+  const toolsHtml=tools.length?(`<h4>🔧 工具列表(真能调用)</h4>`+tools.map(t=>`<div class="tooldef"><div class="tn"><code>${esc(t.name)}</code></div><div class="tsig"><code>${esc(t.sig)}</code></div><div class="tdesc">${esc(t.desc)}</div></div>`).join("")):`<h4>🔧 工具</h4><div class="role">本角色不直接调工具,负责调度 / 汇总。</div>`;
+  $("#mbox").innerHTML=`<button class="mclose" onclick="closeModal()">✕</button><h3>${esc(title)}</h3><div class="role">${esc(role)}</div>${fileHtml}<h4>📝 系统提示词</h4><pre>${esc(system)}</pre>${toolsHtml}`;
+  $("#modal").classList.add("show");}
+function closeModal(){$("#modal").classList.remove("show");}
+$("#modal").onclick=e=>{if(e.target===$("#modal"))closeModal();};
+
+// ── 放大 ──
+function renderZoom(){const z=$("#ztree");if(!focus){z.innerHTML='<div class="ph" style="text-align:center;padding:20px">先跑一轮再放大</div>';$("#zcap").innerHTML="";$("#zstep").textContent="";return;}
+  const ev=focus.events,idx=focus.idx,cur=ev[idx];
+  $("#zoomtitle").textContent="分层构建 · "+($("#focusq").textContent||"");
+  renderTreeInto(z,ev,idx);
+  $("#zstep").textContent=`步 ${idx+1} / ${ev.length}`;const sl=$("#zslider");if(sl){sl.max=ev.length-1;sl.value=idx;}
+  $("#zprev").disabled=idx<=0;$("#znext").disabled=idx>=ev.length-1;
+  const{head,html}=stepBody(cur);
+  $("#zcap").innerHTML=`<div class="zcap-h">${esc(head)}</div><div class="zcap-d">${html}</div>`;}
+function closeZoom(){$("#zoommodal").classList.remove("show");}
+$("#zoommodal").onclick=e=>{if(e.target===$("#zoommodal"))closeZoom();};
+$("#zoom").onclick=()=>{renderZoom();$("#zoommodal").classList.add("show");};
+$("#zprev").onclick=()=>gotoStep(focus.idx-1);$("#znext").onclick=()=>gotoStep(focus.idx+1);$("#zslider").oninput=e=>gotoStep(+e.target.value);
+
+// ── 简报弹窗 ──
+function showBriefModal(q,b){$("#briefsub").textContent=q||"";$("#briefbody").innerHTML=mdToHtml(b||"");$("#briefmodal").classList.add("show");}
+function closeBrief(){$("#briefmodal").classList.remove("show");}
+$("#briefmodal").onclick=e=>{if(e.target===$("#briefmodal"))closeBrief();};
+function downloadReport(q,b){const blob=new Blob(["# "+q+"\n\n"+(b||"")],{type:"text/markdown;charset=utf-8"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=(q||"交付计划").slice(0,40).replace(/[\\/:*?"<>|]/g,"_")+".md";a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);}
+
+// ── 左侧轨迹行 ──
+function stepLine(e,events,i,turnEl){
+  const d=document.createElement("div");let lv="",k="",x="",peek="";
+  if(e.event==="start"){k="🚀";x="<b>技术总监 收到需求</b>";peek=e.topic||"";}
+  else if(e.event==="workspace_seeded"){k="📂";x=`继承上一版 <code>${esc(e.base_run_id||"")}</code> 源码`;peek=(e.files||[]).map(f=>f.relpath).join("、");}
+  else if(e.event==="prompt"){lv=e.worker&&leadOf(e.worker)!=="组长"?"lv2":(e.lead&&e.lead!=="cto"?"lv1":"");k="🧠";x=`${esc(actorLabel(e))} 提示词`;peek=(e.phase||"LLM")+" · System + Human";}
+  else if(e.event==="llm_error"){lv=e.worker&&leadOf(e.worker)!=="组长"?"lv2":(e.lead&&e.lead!=="cto"?"lv1":"");k="⚠️";x=`${esc(actorLabel(e))} 文本生成降级`;peek=e.message||"";}
+  else if(e.event==="contract"){k="📜";x=`技术总监 定契约 → <b>${esc(e.app_name||"")}</b>${e.ok?'':'(回退默认)'}`;peek=e.brief||"";}
+  else if(e.event==="lead_rework"){const L=findLead(e.lead);lv="lv1";k="🔁";x=`<b>${L?L.lead:e.lead}</b> 打回重写 · 第 ${e.attempt} 次`;peek=(e.issues||[]).join("、");}
+  else if(e.event==="lead_dispatch"){const L=findLead(e.lead);k="🏢";x=`技术总监 派发 → <b>${L?L.lead:e.lead}</b>`;}
+  else if(e.event==="worker_dispatch"){lv="lv1";k="🎯";x=`${esc(leadOf(e.worker))} 派 → <code>${esc(wlabel(e.worker))}</code>`;}
+  else if(e.event==="tool_call"){lv=e.worker&&leadOf(e.worker)!=="组长"?"lv2":"lv1";k="🔧";x=`${esc(actorLabel(e))} 调用 <code>${esc(e.tool)}</code>`;peek=JSON.stringify(e.args||{});}
+  else if(e.event==="file_written"){lv="lv2";k="📝";x=`${esc(wlabel(e.worker))} 写出 <code>${esc(e.relpath)}</code>`;peek=e.bytes+" 字节 · 点看 diff";}
+  else if(e.event==="tool_done"){lv=e.worker&&leadOf(e.worker)!=="组长"?"lv2":"lv1";k="✅";x=`${esc(actorLabel(e))} 完成 <code>${esc(e.tool)}</code>`;peek=e.result||"";}
+  else if(e.event==="review_result"){lv="lv2";k="🔍";x=`代码审查 · ${e.ok?'编译通过':'<b>编译失败</b>'}`;peek=(e.review||"").slice(0,90);}
+  else if(e.event==="test_result"){lv="lv2";const r=e.result||{};if(e.kind==="perf"){k="⚡";x=`性能测试 · ${r.ok?('avg '+r.avg_ms+'ms'):'失败'}`;}else{k="🧪";x=`功能测试 · ${r.ok?'全部通过':'<b>未通过</b>'}`;}}
+  else if(e.event==="lead_check"){lv="lv1";k="🔎";const who=e.lead==="cto"?"技术总监 验收":((findLead(e.lead)||{}).lead||"组长")+" 自检";x=`${esc(who)} · ${e.ok?'通过':'<b>有待改进</b>'}`;peek=(e.checks||[]).map(c=>(c.pass?'✓':'✗')+c.name).join("  ");}
+  else if(e.event==="worker_done"){lv="lv2";k="🛠";x=`${esc(actorLabel(e))} 交活`;peek=e.output||"";}
+  else if(e.event==="lead_done"){const L=findLead(e.lead);k="📦";x=`<b>${L?L.lead:e.lead}</b> 汇总回流 技术总监`;peek=e.output||"";}
+  else if(e.event==="final"){k="📋";x="<b>技术总监 综合</b> → 交付计划";peek="点看完整计划 / 启动预览";}
+  else if(e.event==="error"){k="⚠️";x=esc(e.message||"出错");}
+  else return null;
+  d.className="tstep "+lv;d.dataset.i=i;
+  const ts=e.t!=null?` <span class="tt">+${(e.t/1000).toFixed(1)}s</span>`:"";
+  d.innerHTML=`<span class="k">${k}</span><span class="x">${x}${ts}<div class="peek">${esc(peek)}</div></span>`;
+  d.onclick=()=>setFocus(events,i,null,turnEl);return d;
+}
+function turnHead(sb,query,fin){const steps=sb.querySelector(".steps");const ns=steps?steps.querySelectorAll(".tstep").length:0;const col=steps&&steps.classList.contains("collapsed");
+  const runBtn=fin&&fin.run_id?`<button class="dlbtn brun bruna">🚀 启动预览</button>`:"";
+  sb.querySelector(".sh").innerHTML=`<span>🏛 软件交付 · 技术总监</span><span class="acts">`+(ns?`<button class="tgl">${col?"▸":"▾"} ${ns} 步</button>`:"")+(fin?`${runBtn}<button class="dlbtn bzoom">⤢ 计划</button><button class="dlbtn bdl">⬇</button>`:"")+`</span>`;
+  if(fin){sb.querySelector(".bdl").onclick=ev=>{ev.stopPropagation();downloadReport(query,fin.brief);};sb.querySelector(".bzoom").onclick=ev=>{ev.stopPropagation();showBriefModal(query,fin.brief);};
+    const rb=sb.querySelector(".bruna");if(rb)rb.onclick=ev=>{ev.stopPropagation();launchPreview(fin.run_id);};}
+  const tgl=sb.querySelector(".tgl");if(tgl)tgl.onclick=ev=>{ev.stopPropagation();const c=steps.classList.toggle("collapsed");tgl.textContent=(c?"▸":"▾")+" "+ns+" 步";};}
+function addBrief(sb,events,fin){const br=document.createElement("div");br.className="brief md";br.innerHTML=mdToHtml(fin.brief||"");br.onclick=()=>setFocus(events,events.indexOf(fin),null,sb);sb.appendChild(br);}
+function renderTurn(t){const u=document.createElement("div");u.className="umsg";u.textContent=t.query;threadEl.appendChild(u);
+  const sb=document.createElement("div");sb.className="sblock";sb.innerHTML='<div class="sh"></div><div class="steps collapsed"></div>';
+  const stepsEl=sb.querySelector(".steps");t.events.forEach((e,i)=>{const ln=stepLine(e,t.events,i,sb);if(ln)stepsEl.appendChild(ln);});
+  const fin=t.events.find(e=>e.event==="final");turnHead(sb,t.query,fin);if(fin)addBrief(sb,t.events,fin);
+  threadEl.appendChild(sb);threadEl.scrollTop=threadEl.scrollHeight;return sb;}
+
+function send(){if(busy)return;const q=$("#q").value.trim();if(!q)return;$("#q").value="";busy=true;$("#go").disabled=true;syncBtns();
+  const u=document.createElement("div");u.className="umsg";u.textContent=q;threadEl.appendChild(u);
+  const sb=document.createElement("div");sb.className="sblock";sb.innerHTML='<div class="sh"><span>🏛 软件交付 · 技术总监</span></div><div class="steps"></div>';threadEl.appendChild(sb);threadEl.scrollTop=threadEl.scrollHeight;$("#focusq").textContent=q;
+  const stepsEl=sb.querySelector(".steps");const ev=[];
+  const es=new EventSource("/api/run?query="+encodeURIComponent(q)+"&session="+encodeURIComponent(sessionId));
+  const onEv=t=>e=>{const d={event:t,...JSON.parse(e.data)};if(t==="start"&&d.leads)LEADS=d.leads;ev.push(d);
+    const ln=stepLine(d,ev,ev.length-1,sb);if(ln)stepsEl.appendChild(ln);
+    setFocus(ev,ev.length-1,null,sb);
+    if(t==="final"){turnHead(sb,q,d);addBrief(sb,ev,d);}
+    threadEl.scrollTop=threadEl.scrollHeight;};
+  ["start","workspace_seeded","prompt","llm_error","contract","lead_dispatch","worker_dispatch","tool_call","file_written","tool_done","worker_done","review_result","test_result","lead_check","lead_rework","lead_done","final"].forEach(t=>es.addEventListener(t,onEv(t)));
+  es.addEventListener("final",()=>{es.close();busy=false;$("#go").disabled=false;syncBtns();loadConversations();});
+  es.addEventListener("error",e=>{let m="连接中断";try{m=JSON.parse(e.data).message;}catch(_){}const er=document.createElement("div");er.className="tstep";er.innerHTML='<span class="k">⚠️</span><span class="x">'+esc(m)+'</span>';stepsEl.appendChild(er);es.close();busy=false;$("#go").disabled=false;syncBtns();});}
+
+// ── 多轮对话 ──
+function newConversation(){sessionId="s-"+Math.random().toString(36).slice(2,8);threadEl.innerHTML="";focus=null;LEADS=[];$("#focusq").textContent="新对话 · 等待运行";$("#launchbtn").style.display="none";renderAnim([],-1);renderContent(null);switchTab("data");syncBtns();$("#convsel").value="";$("#memnote").textContent="🧠 新会话 "+sessionId+" · 同会话追问,技术总监 记得上一版成果";}
+async function openConversation(s){if(!s||busy)return;sessionId=s;threadEl.innerHTML="";
+  const turns=await fetch("/api/conversation/"+encodeURIComponent(s)).then(r=>r.json());
+  let sb=null,evs=null,q="";turns.forEach(t=>{const st=t.events.find(e=>e.event==="start");if(st&&st.leads)LEADS=st.leads;sb=renderTurn(t);evs=t.events;q=t.query;});
+  if(evs)setFocus(evs,evs.length-1,q,sb);
+  $("#memnote").textContent="🧠 会话 "+s+" · "+turns.length+" 轮 · 可继续追问(记忆贯穿)";}
+async function loadConversations(){let list=[];try{list=await fetch("/api/conversations").then(r=>r.json());}catch(_){}
+  const sel=$("#convsel"),cur=sessionId;
+  sel.innerHTML='<option value="">— 当前新对话 —</option>'+list.map(c=>{const t=new Date(c.last_ts*1000).toLocaleString("zh-CN",{month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit"});return `<option value="${esc(c.session)}">${esc(c.title.slice(0,16))} · ${c.n_turns}轮 · ${t}</option>`;}).join("");
+  if(list.find(c=>c.session===cur))sel.value=cur;}
+
+$("#go").onclick=send;$("#q").addEventListener("keydown",e=>{if(e.key==="Enter")send();});
+$("#prev").onclick=stepPrev;$("#next").onclick=stepNext;$("#play").onclick=play;$("#newconv").onclick=newConversation;
+$("#convsel").onchange=e=>{e.target.value?openConversation(e.target.value):newConversation();};
+$("#delconv").onclick=async()=>{const s=$("#convsel").value;if(!s){alert("先在下拉里选一个历史对话再删");return;}if(!confirm("删除该对话?不可恢复"))return;try{await fetch("/api/conversation/"+encodeURIComponent(s),{method:"DELETE"});}catch(_){}if(sessionId===s)newConversation();await loadConversations();};
+document.querySelectorAll(".tabbar .tab").forEach(b=>b.onclick=()=>switchTab(b.dataset.tab));
+document.addEventListener("keydown",e=>{if(e.key==="Escape"){closeModal();closeBrief();closeZoom();closeFile();closeRun();}if(focus&&!busy&&!$("#runmodal").classList.contains("show")){if(e.key==="ArrowLeft")stepPrev();if(e.key==="ArrowRight")stepNext();}});
+renderAnim([],-1);newConversation();loadConversations();ensureAgents();
+</script>
+</body>
+</html>
