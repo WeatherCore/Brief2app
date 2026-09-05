@@ -4,11 +4,14 @@
 
 **输入一句需求，一个 LLM 虚拟软件团队真的交付一个能跑的 Web 应用**
 
-*From Brief to Running App — A Hierarchical Multi-Agent Software Delivery Team* / LangGraph + FastAPI + SQLite + OpenRouter
+*From Brief to Running App — A Hierarchical Multi-Agent Software Delivery Team* / LangGraph + FastAPI + SQLite + React · Vite + OpenRouter
 
 [![Python](https://img.shields.io/badge/Python-3.12-3776AB?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
 [![LangGraph](https://img.shields.io/badge/LangGraph-1.2.4-1C3C3C?style=flat-square&logo=langchain&logoColor=white)](https://langchain-ai.github.io/langgraph/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.136-009688?style=flat-square&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![React](https://img.shields.io/badge/React-18-61DAFB?style=flat-square&logo=react&logoColor=black)](https://react.dev/)
+[![Vite](https://img.shields.io/badge/Vite-5-646CFF?style=flat-square&logo=vite&logoColor=white)](https://vitejs.dev/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.6-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![SQLite](https://img.shields.io/badge/SQLite-内置-003B57?style=flat-square&logo=sqlite&logoColor=white)](https://www.sqlite.org/)
 [![DeepSeek](https://img.shields.io/badge/LLM-OpenRouter%20兼容-4D6BFE?style=flat-square)](https://openrouter.ai/)
 
@@ -30,8 +33,8 @@ Brief2app（Hierarchical · 软件交付多团队）是一个基于 LangGraph St
 
 ```mermaid
 flowchart TB
-    subgraph client["浏览器 frontend/index.html"]
-        UI["单页控制台<br/>树状协作动画 · 产出文件面板 · iframe 预览"]
+    subgraph client["浏览器控制台 frontend-new（React 18 + Vite · :5173）"]
+        UI["会话管理 · 组织树动画 · 逐步回放<br/>产物/质量检查器 · iframe 预览"]
     end
     subgraph server["后端 backend/"]
         APP["app.py · FastAPI 主入口 :8090"]
@@ -63,6 +66,9 @@ flowchart TB
     F -- "uvicorn 子进程 + 健康检查" --> PRE["预览 URL → iframe"]
 ```
 
+<!-- CC: 新增 -->
+> dev 模式下 `frontend-new` 的 `/api` 请求由 Vite 代理转发到 `:8090`；旧版零依赖单文件控制台（`frontend/index.html`）仍由 FastAPI 直接托管在同一端口，两者共用同一套 `/api/*`。
+
 ## ✨ 核心技术亮点
 
 - 📝 **动态接口契约** — 技术总监按任意需求生成 JSON 契约（表/字段/端点/页面元素），`_normalize_contract` 校验补全、失败回退内置契约；四个工程师的 SPEC 从同一契约渲染，联调天然一致（`backend/agent.py`）
@@ -81,6 +87,7 @@ flowchart TB
 | 组件 | 版本 | 说明 |
 |---|---|---|
 | Python | 3.12 | 其他 3.10+ 一般可用，未验证 |
+| Node.js | ≥ 18 | 仅新版控制台 `frontend-new/` 需要（Vite 5）；只用 `:8090` 旧版可不装 |
 | OpenRouter Key | — | [openrouter.ai/keys](https://openrouter.ai/keys) 免费注册获取 |
 
 ### 1️⃣ 安装依赖
@@ -101,20 +108,32 @@ cp .env.example .env
 # Windows 用: copy .env.example .env
 ```
 
-### 3️⃣ 启动
+### 3️⃣ 启动后端
 
 ```bash
 .venv/bin/python -m uvicorn backend.app:app --host 127.0.0.1 --port 8090
 ```
 
-### 4️⃣ 体验核心链路
+<!-- CC: 新增 -->
+### 4️⃣ 打开控制台（二选一）
 
-1. 打开 `http://127.0.0.1:8090`，输入需求：`做一个待办清单：能添加任务（标题/优先级）、查看列表、删除任务`
-2. 观看树状协作动画：定契约 → 三组长接力 → 组内并行 → 写文件/测试/审查事件实时弹出
-3. 交付完成后阅读技术总监的 Markdown 总结，点「🚀 启动预览」在 iframe 里使用真应用
-4. 追问增量需求（如 `把标题改成「我的番茄钟」`）验证多轮演进
+```bash
+# 方式 A（推荐）：新版 React 控制台 —— 组织树动画 / 逐步回放 / 历史会话 / 检查器
+cd frontend-new && npm install && npm run dev
+#   → 打开 http://localhost:5173（/api 由 Vite 代理到 8090）
 
-### 5️⃣ 无浏览器自测
+# 方式 B：旧版零依赖单文件控制台 —— 浏览器直接打开 http://127.0.0.1:8090
+```
+
+### 5️⃣ 体验核心链路
+
+1. 输入需求：`做一个待办清单：能添加任务（标题/优先级）、查看列表、删除任务`
+2. 观看组织树动画：定契约 → 三组长接力 → 组内并行 → 写文件/测试/审查事件实时弹出
+3. 用 ←/→ 键逐步回放，点节点看系统提示词与工具定义，点写文件事件看 unified diff
+4. 交付完成后阅读技术总监的 Markdown 总结，点「🚀 启动预览」在 iframe 里使用真应用
+5. 追问增量需求（如 `把标题改成「我的番茄钟」`）验证多轮演进
+
+### 6️⃣ 无浏览器自测
 
 ```bash
 .venv/bin/python -m backend.agent
@@ -146,10 +165,19 @@ Brief2app/
 │   ├── agent.py        # 🧠 核心：契约 + 组织结构 + 分层图 + 返工循环
 │   ├── data/runs.db    # (运行时) 每轮交付存一行
 │   └── workspace/      # (运行时) 每次构建一个可运行应用
-├── 📂 frontend/index.html   # 前端单页：树状动画 + 产出面板 + 预览
+├── 📂 frontend-new/         # 🎨 新版控制台（React 18 + Vite + TS + Tailwind，dev :5173）
+│   └── src/
+│       ├── App.tsx          # 入口编排：布局 + 焦点派生 + 弹窗 + 播放/键盘
+│       ├── hooks/useRunFeed.ts  # 全局状态机：SSE 边收边入栈 + 回放焦点
+│       ├── lib/             # types(后端契约镜像) · api(SSE 客户端) · org · steps · markdown · diff
+│       └── components/      # 组织树 · 会话面板 · 舞台 · 检查器 · 弹窗（23 个文件）
+├── 📂 frontend/index.html   # 旧版零依赖单文件控制台（FastAPI :8090 直接托管）
 ├── requirements.txt
 └── .env.example
 ```
+
+<!-- CC: 新增 -->
+> 📝 **逐行注释版**：`backend/` 全部 8 个源码文件（约 2000 行）已附**逐行意图级中文注释**——每个分支、每次外部调用、每个关键赋值都讲清"为什么"，函数级注释 100% 覆盖。配合 [ZHIDAO.md](ZHIDAO.md) 的行号导读，可以当"带批注的实体书"直接通读。前端 `frontend-new/` 保持原味未加注释，逐文件导读见 [ZHIDAO.md](ZHIDAO.md) **第 5.9 节**。
 
 更深入的逐文件导读（行号级阅读顺序、返工循环机制、`___RESULT___` 子进程协议、常见问题）见 **[ZHIDAO.md](ZHIDAO.md)** 📖
 
@@ -193,6 +221,7 @@ Brief2app/
 - [x] 动态契约 + 回退契约 + 多轮增量修改
 - [x] 真执行工具链（静态检查 / 功能 / 性能 / 启动预览）
 - [x] 测试驱动返工 + 组长限次返工
+- [x] 新版 React 控制台 `frontend-new/`（组织树动画 / 逐步回放 / 历史会话 / 产物质量检查器）
 - [ ] 支持多表契约与关联关系
 - [ ] 生成应用支持用户自定义技术栈模板
 - [ ] 返工策略可配置（次数/打回范围）
