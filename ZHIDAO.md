@@ -78,7 +78,7 @@ async def run_worker(worker, contract):
 
 ### 2.5 SSE 事件流 = 生产者-消费者式的"直播弹幕"
 
-- **是什么**：`/api/run` 接口里，`producer` 协程跑 Agent 图、把事件 put 进 `asyncio.Queue`；外层 while 循环 get 出来逐帧转成 SSE 发给前端。前端据此画出树状协作动画。
+- **是什么**：`/api/run` 接口里，`producer` 协程跑 Agent 图、把事件 put 进 `asyncio.Queue`；外层 while 循环 get 出来逐帧转成 SSE 发给前端。前端据此画出树状协作动画。新版控制台 `frontend-new` 用原生 `EventSource` 订阅全部 17 种事件，收到 `final`/`error` 即主动关流——绝不自动重连（重连等于把整轮交付重跑一遍）。
 - **把它理解为**：施工现场装了直播摄像头，每个工人每干一步（派活/调工具/写文件/测试结果）都发一条弹幕。
 
 ### 2.6 真执行的工具（tools.py）= 不是嘴上说说
@@ -94,21 +94,51 @@ async def run_worker(worker, contract):
 ```
 Brief2app/
 ├── backend/                          # 后端主包（全部业务逻辑）
-│   ├── __init__.py        📖 13 行   # 模块地图：一句话讲清各模块职责
-│   ├── config.py          ⭐ 31 行   # 配置单一真相源：路径 + LLM 连接参数(.env)
-│   ├── runtime.py         ⭐ 35 行   # per-request 上下文：contextvars × 6 + SSE 帧格式
-│   ├── app.py             🚪 22 行   # 主入口：组装 FastAPI + CORS + 挂路由 + 前端页
-│   ├── store.py           💾 71 行   # 持久层：SQLite runs.db(历史/多轮记忆/删除)
-│   ├── server.py          🌐 191 行  # 接口层：全部 /api/* 路由 + SSE 流式端点
-│   ├── tools.py           🔧 394 行  # 工具层：写文件/静态检查/功能测试/压测/起应用
-│   ├── agent.py           🧠 583 行  # 智能体层：契约 + 组织结构 + 分层图 + 返工循环
+│   ├── __init__.py        📖 15 行   # 模块地图：一句话讲清各模块职责
+│   ├── config.py          ⭐ 46 行   # 配置单一真相源：路径 + LLM 连接参数(.env)
+│   ├── runtime.py         ⭐ 42 行   # per-request 上下文：contextvars × 6 + SSE 帧格式
+│   ├── app.py             🚪 31 行   # 主入口：组装 FastAPI + CORS + 挂路由 + 前端页
+│   ├── store.py           💾 113 行  # 持久层：SQLite runs.db(历史/多轮记忆/删除)
+│   ├── server.py          🌐 298 行  # 接口层：全部 /api/* 路由 + SSE 流式端点
+│   ├── tools.py           🔧 568 行  # 工具层：写文件/静态检查/功能测试/压测/起应用
+│   ├── agent.py           🧠 899 行  # 智能体层：契约 + 组织结构 + 分层图 + 返工循环
 │   ├── data/
 │   │   └── runs.db                   # SQLite(运行时生成)：每轮交付存一行
 │   ├── logs/                         # 运行日志(config.py 自动创建)
 │   └── workspace/                    # 工程师真写代码落盘处，每次构建一个子目录
 │       └── <run_id>/                 # db.py / app.py / static/index.html / static/app.js
+├── frontend-new/                     # 🎨 新版前端控制台（React 18 + Vite 5 + TypeScript + Tailwind）
+│   ├── index.html                    # Vite 挂载点（#root）
+│   ├── package.json                  # 脚本：dev(:5173) / build / preview
+│   ├── vite.config.ts                # dev 端口 5173，/api 代理到 127.0.0.1:8090（SSE 原样透传）
+│   ├── tailwind.config.ts            # 设计系统：clay/moss/brick 三色语义 + max-w-shell
+│   └── src/
+│       ├── main.tsx                  # React 挂载入口（StrictMode）
+│       ├── App.tsx        🚪 260 行  # 全局编排：布局 + 焦点派生 + 播放/键盘 + 5 种弹窗
+│       ├── hooks/
+│       │   └── useRunFeed.ts  ⭐ 163 # 全局状态机：会话/轮次/SSE 边收边入栈/回放焦点
+│       ├── lib/                      # 数据与逻辑层（零 UI）
+│       │   ├── types.ts       ⭐ 180 # 后端契约镜像：17 种 RunEvent 判别联合
+│       │   ├── api.ts         110    # fetch 封装 + EventSource 订阅（final/error 即关流）
+│       │   ├── org.ts         76     # 事件重放 → 组织树状态快照（idle/live/done）
+│       │   ├── steps.tsx      198    # 事件 → 单步摘要（图标/色调/标题/详情）
+│       │   ├── markdown.tsx   115    # 极简 Markdown 渲染（白名单语法，无 XSS 面）
+│       │   ├── diff.tsx       21     # unified diff 按行着色
+│       │   └── format.ts      16     # 秒/字节/时间戳格式化
+│       └── components/               # 纯展示组件（逐文件导读见 5.9）
+│           ├── TopBar.tsx            # 顶栏：标题 + 后端健康状态
+│           ├── ConversationPanel.tsx # 左栏：会话列表 + 输入框 + 轮次时间线
+│           ├── StagePanel.tsx        # 深色舞台：组织树动画 + 步进回放控制
+│           ├── OrgTree.tsx           # CTO/组长/成员树 + 状态着色 + 连线动作文案
+│           ├── InspectorPanel.tsx    # 检查器：data / files / tests 三个 Tab
+│           ├── StepDetail.tsx        # 单事件详情（提示词/diff/测试报告）
+│           ├── FilesTree.tsx         # 产物文件树（按扩展名图标）
+│           ├── TestsCards.tsx        # 质量结论卡：审查/功能/性能
+│           ├── ZoomOverlay.tsx       # 全屏回放覆盖层
+│           ├── dialogs/dialogs.tsx   # 4 个弹窗：Agent 卡/文件 diff/交付计划/预览
+│           └── ui/                   # Modal（弹窗壳）+ bits（Chip/IconBtn/Panel 原子件）
 ├── frontend/
-│   └── index.html         🎨         # 前端单页：树状协作动画 + 产出文件面板 + iframe 预览
+│   └── index.html         🎨         # 旧版零依赖单文件控制台（FastAPI :8090 直接托管，见 Q10）
 ├── requirements.txt       📋         # langgraph / langchain-openai / fastapi / pyflakes ...
 ├── .env.example           📋         # 环境变量模板(OPENROUTER_API_KEY 等)
 ├── .gitignore                        # .env / data / workspace 等不入库
@@ -120,6 +150,9 @@ Brief2app/
 
 注意三个"运行时才出现"的目录：`data/`（历史库）、`logs/`（日志）、`workspace/<run_id>/`（每次构建的产物），都由 `config.py` 在启动时自动创建——`workspace` 里每个子目录就是一个"交付出来的小软件"，可以在页面上直接点「🚀 启动预览」跑起来。
 
+<!-- CC: 新增 -->
+另有两个"不入库"的前端目录：`frontend-new/node_modules/`（依赖）与 `frontend-new/dist/`（构建产物）已被 `.gitignore` 忽略，clone 后需在 `frontend-new/` 里执行 `npm install` 才能起 dev 服务器。新旧两个前端共用同一套 `/api/*`，后端不感知差异（见 Q10）。
+
 ---
 
 ## 4. 运行流程全景图
@@ -127,7 +160,7 @@ Brief2app/
 一次完整交付（`GET /api/run?query=做一个待办清单&session=abc`）的全过程：
 
 ```
-GET /api/run (server.py:318)
+GET /api/run (server.py:193)
 │
 ▼
 ┌──────────────────────────────────────────────────────────────────┐
@@ -164,7 +197,7 @@ GET /api/run (server.py:318)
 │    → 组长 LLM 小结(lead_done)                                    │
 │                                                                  │
 │  ★ 测试组专属分支:功能测试失败 → 带错误堆栈跨组打回后端组重写       │
-│    → 重测一次(测试驱动返工,agent.py:426-439)                      │
+│    → 重测一次(测试驱动返工,agent.py:652-661)                      │
 │  退出条件:全部组长完成 → cto_synthesize                           │
 └──────────────────────────────────────────────────────────────────┘
 │
@@ -184,16 +217,18 @@ GET /api/run (server.py:318)
 
 ## 5. 逐文件代码导读
 
-> 阅读顺序说明：skeleton 的 quick_start 以 `backend/__init__.py` 为入口（入度 0，模块地图，读者最先接触）。在语义上补充一句：本项目"入口"是 `app.py`，但理解全局的关键在 `agent.py`——建议按"地图 → 入口 → 外围 → 核心引擎"的顺序读，总耗时约 60-90 分钟。
+> 阅读顺序说明：骨架依赖分析给出的快速上手三文件是 `frontend-new/src/App.tsx`（入口，不被任何文件依赖）→ `lib/types.ts`（被 15 个前端文件引用的类型契约）→ `lib/org.ts`。语义上补充：这个项目的"发动机"在后端——建议按**后端主线（5.1→5.8，约 60-90 分钟）→ 前端支线（5.9，约 40 分钟）**的双线顺序读，两条线在"SSE 事件流"处会合。
+>
+> 📝 **注释版说明（2026-09）**：backend 全部 8 个源码文件已附**逐行意图级中文注释**（每个分支/外部调用/关键赋值必注，机器验收密度），5.1-5.8 的行号已按注释版源码刷新——读代码时可直接按行号跳转，注释本身就是最好的导游。**frontend-new 保持原味阅读（未加注释）**，5.9 只给文件导读与行数定位。
 
-### 5.1 `backend/__init__.py`（13 行 · 约 1 分钟）
+### 5.1 `backend/__init__.py`（15 行 · 约 1 分钟）
 
 - **作用**：模块地图——用一段 docstring 讲清六个模块各自的职责和依赖方向。
 - **阅读顺序建议**：第一个读，读完对全项目有 80% 的骨架认知。
 
 **要点**：① 这是"先宏观后微观"的项目自述；② 本案例无联网检索工具（纯设计推理 + 本地工具）。
 
-### 5.2 `backend/config.py`（31 行 · 约 2 分钟）
+### 5.2 `backend/config.py`（46 行 · 约 2 分钟）
 
 - **作用**：配置单一真相源——路径常量 + LLM 连接参数，全部从项目根 `.env` 读。
 - **关键内容**：
@@ -209,7 +244,7 @@ GET /api/run (server.py:318)
 
 **要点**：① 本文件只提供"值"，不实例化客户端（客户端在 agent 层建）；② 密钥绝不硬编码，`.env` 不入库。
 
-### 5.3 `backend/runtime.py`（35 行 · 约 3 分钟）
+### 5.3 `backend/runtime.py`（42 行 · 约 3 分钟）
 
 - **作用**：per-request 运行期上下文——6 个 `ContextVar` + 2 个工具函数。
 - **关键数据结构**：
@@ -225,83 +260,109 @@ GET /api/run (server.py:318)
 
 **要点**：① 深层节点无需层层传参；② `sse()` 把 dict 序列化成一帧 SSE（`event: x\ndata: {...}\n\n`）。
 
-### 5.4 `backend/app.py`（22 行 · 约 1 分钟）
+### 5.4 `backend/app.py`（31 行 · 约 1 分钟）
 
 - **作用**：主入口——组装 FastAPI 应用（CORS 中间件 + 挂 `server.router` + 前端单页路由）。
 - **阅读顺序建议**：启动方式在模块 docstring 里（`uvicorn backend.app:app --port 8090`）。
 
-**要点**：前端就一个 `index.html`，由 `FileResponse` 托管。
+**要点**：`/` 路由用 `FileResponse` 托管的是**旧版零依赖单文件控制台**（`frontend/index.html`）；新版 React 控制台 `frontend-new/` 由 Vite dev server 提供在 5173，`/api` 代理回 8090（见 8.3 与 Q10）。
 
-### 5.5 `backend/store.py`（71 行 · 约 5 分钟）
+### 5.5 `backend/store.py`（113 行 · 约 5 分钟）
 
 - **作用**：SQLite 持久层。一张 `runs` 表，每轮交付存一行（事件流 JSON + 最终总结）。
 - **关键函数**：
 
 | 函数 | 行号(~) | 作用 |
 |---|---|---|
-| `_db()` | 136 | 懒建表（`CREATE TABLE IF NOT EXISTS`） |
-| `load_history(session)` | 145 | 按 ts 升序取全会话历史（多轮记忆的来源） |
-| `save_run(...)` | 156 | 插入一行：uuid 前 12 位作 id |
-| `list_conversations()` | 168 | 按 session 聚合成会话列表（标题=首条 query） |
-| `get_conversation(session)` | 180 | 全轮次详情（前端回放动画用） |
-| `delete_conversation(session)` | 187 | 删会话 |
+| `_db()` | 19 | 懒建表（`CREATE TABLE IF NOT EXISTS`） |
+| `load_history(session)` | 35 | 按 ts 升序取全会话历史（多轮记忆的来源） |
+| `save_run(...)` | 53 | 插入一行：uuid 前 12 位作 id |
+| `list_conversations()` | 74 | 按 session 聚合成会话列表（标题=首条 query） |
+| `get_conversation(session)` | 95 | 全轮次详情（前端回放动画用） |
+| `delete_conversation(session)` | 106 | 删会话 |
 
 **要点**：① 所有读写包 try/except 静默降级——历史功能坏了不影响主流程；② `load_history` 默认不限轮数，同会话可以一直追问。
 
-### 5.6 `backend/server.py`（191 行 · 约 15 分钟）
+### 5.6 `backend/server.py`（298 行 · 约 15 分钟）
 
 - **作用**：接口层——所有 `/api/*` 路由 + 最核心的 SSE 流式端点 `/api/run`。
-- **阅读顺序建议**：先读 5 个简单路由（health/agents/conversations/launch/files，~63-314），再精读 `/api/run`（~318-387）。
+- **阅读顺序建议**：先读 5 个简单路由（health/agents/conversations/launch/files，~102-190），再精读 `/api/run`（~193-298）。
 - **关键函数**：
 
 | 函数 | 行号(~) | 作用 |
 |---|---|---|
-| `_latest_build_context(session)` | 28 | 从历史事件里找同会话最近一次构建（增量修改的上下文） |
-| `_seed_workspace_from_previous` | 43 | 把上一版 4 个源码文件复制到新工作区（不带 data.db，防旧 schema 干扰） |
-| `launch / stop` | 92/101 | 真起/真停生成的应用（同步端点，FastAPI 走线程池） |
-| `run()` → `gen()` | 318 | SSE 生产者-消费者：producer 跑图 put 事件，外层 get + yield |
+| `_latest_build_context(session)` | 43 | 从历史事件里找同会话最近一次构建（增量修改的上下文） |
+| `_seed_workspace_from_previous` | 71 | 把上一版 4 个源码文件复制到新工作区（不带 data.db，防旧 schema 干扰） |
+| `launch / stop` | 147/160 | 真起/真停生成的应用（同步端点，FastAPI 走线程池） |
+| `run()` → `gen()` | 193 | SSE 生产者-消费者：producer 跑图 put 事件，外层 get + yield |
 
-**要点**：① `FILES.set([])`/`TESTS.set([])` 必须在 `create_task` 之前——子任务复制的是同一列表引用，节点里只 append 就地改，外层才看得到（~329-331 有专门注释）；② 多轮记忆的拼装逻辑在 producer 里（~348-361）：历史回顾 + 上一版契约 + 修改策略三段拼成 `model_input`。
+**要点**：① `FILES.set([])`/`TESTS.set([])` 必须在 `create_task` 之前——子任务复制的是同一列表引用，节点里只 append 就地改，外层才看得到（~210-213 有专门注释）；② 多轮记忆的拼装逻辑在 producer 里（~236-256）：历史回顾 + 上一版契约 + 修改策略三段拼成 `model_input`。
 
-### 5.7 `backend/tools.py`（394 行 · 约 20 分钟）
+### 5.7 `backend/tools.py`（568 行 · 约 20 分钟）
 
 - **作用**：工具层——给各 Agent 真正能调用的本地工具（免费、零配置、真执行）。
-- **阅读顺序建议**：先读 `TOOLSPECS`（~37-71，每个工具的签名+说明，前端"点击查看定义"展示用），再按"文件读写 → 检查 → 测试 → 启动"四段读。
+- **阅读顺序建议**：先读 `TOOLSPECS`（~39-86，每个工具的签名+说明，前端"点击查看定义"展示用），再按"文件读写 → 检查 → 测试 → 启动"四段读。
 - **关键工具**：
 
 | 工具 | 行号(~) | 真在哪里 |
 |---|---|---|
-| `write_code_file` | 100 | 真落盘 + `difflib.unified_diff` 产 diff + 线程锁保护 FILES 清单 |
-| `_strip_fence` | 90 | 剥掉 LLM 输出里的 ``` 围栏再落盘 |
-| `inspect_frontend/backend` | 151/168 | 真读文件比对契约（元素 id/函数名/路由） |
-| `static_check` | 239 | 真跑 `py_compile`（语法）+ `pyflakes`（告警）子进程 |
-| `run_functional_test` | 307 | 子进程里 TestClient 真打生成的 app：GET→POST→GET 断言读写打通 |
-| `run_perf_test` | 338 | 连打 N 次统计 avg/p95/max 延迟 |
-| `launch_app` | 355 | 空闲端口起 uvicorn + 14s 健康检查 + 复用已起进程 |
+| `write_code_file` | 129 | 真落盘 + `difflib.unified_diff` 产 diff + 线程锁保护 FILES 清单 |
+| `_strip_fence` | 113 | 剥掉 LLM 输出里的 ``` 围栏再落盘 |
+| `inspect_frontend/backend` | 209/237 | 真读文件比对契约（元素 id/函数名/路由） |
+| `static_check` | 355 | 真跑 `py_compile`（语法）+ `pyflakes`（告警）子进程 |
+| `run_functional_test` | 445 | 子进程里 TestClient 真打生成的 app：GET→POST→GET 断言读写打通 |
+| `run_perf_test` | 480 | 连打 N 次统计 avg/p95/max 延迟 |
+| `launch_app` | 503 | 空闲端口起 uvicorn + 14s 健康检查 + 复用已起进程 |
 
 **要点**：① 测试脚本以**代码字符串**（`_SNIP_FUNC`/`_SNIP_PERF`）形式存在，经环境变量 `CONTRACT_JSON` 传契约——杜绝代码拼接注入；② 子进程结果约定打印 `___RESULT___` 后跟一行 JSON（`_run_snippet` 解析）；③ `_LAUNCHED` 记住 run_id→进程，重复点启动复用不重起。
 
-### 5.8 `backend/agent.py`（583 行 · 约 30 分钟 · 核心中的核心）
+### 5.8 `backend/agent.py`（899 行 · 约 30 分钟 · 核心中的核心）
 
 - **作用**：智能体层——契约机制 + 组织结构定义 + 分层图构建 + 返工循环。
-- **阅读顺序建议**：按"契约（~40-156）→ SPEC（~158-225）→ 组织 LEADS（~229-266）→ 事件与 LLM 封装（~276-304）→ 干活（~308-399）→ 组长/CTO（~402-497）→ 建图（~500-513）→ 入口（~533-583）"顺序。
+- **阅读顺序建议**：按"契约（~54-208）→ SPEC（~228-330）→ 组织 LEADS（~332-365）→ 事件与 LLM 封装（~382-438）→ 干活（~442-597）→ 组长/CTO（~600-753）→ 建图（~756-781）→ 入口（~811-819）"顺序。
 - **关键数据结构**：
 
 | 结构 | 行号(~) | 说明 |
 |---|---|---|
-| `FALLBACK_CONTRACT` | 41 | 契约解析失败的兜底（极简记账本） |
-| `_normalize_contract(c)` | 68 | 校验表名/字段/端点格式，补 label/required/测试值，选 marker_field |
-| `_apply_revision_hints(topic, c)` | 107 | 正则识别"新增 X 字段/标题改成 Y"做确定性修改，防 LLM 漏改 |
-| `_db_spec/_api_spec/_ui_spec/_js_spec` | 163-225 | 四个工程师的岗位说明书，按契约动态渲染（连"sqlite 游标返回 tuple 不能直接 dict(row)"的坑都写进去了） |
-| `LEADS` | 229 | 3 个组长 × 8 成员的组织结构（id/提示词/工具/产出文件） |
-| `DeliveryState` | 269 | 图状态：topic/contract/leads_done/final |
-| `_run_worker(...)` | 308 | 按 kind 分派：coder 写文件 / review 审查 / functional 测试 / perf 压测 |
-| `_make_lead_node(L)` | 419 | 组长节点闭包：并行派活 → 自检 → 打回重写≤2 次 → LLM 小结 |
-| `cto_synthesize(state)` | 466 | CTO 验收（acceptance_check）+ 综合交付总结 |
-| `_build_graph()` | 500 | StateGraph 手搭：START→前端→后端→测试→CTO→END |
-| `run_events(...)` | 533 | 对外入口：先定契约再跑图，返回 {final, contract} |
+| `FALLBACK_CONTRACT` | 55 | 契约解析失败的兜底（极简记账本） |
+| `_normalize_contract(c)` | 93 | 校验表名/字段/端点格式，补 label/required/测试值，选 marker_field |
+| `_apply_revision_hints(topic, c)` | 152 | 正则识别"新增 X 字段/标题改成 Y"做确定性修改，防 LLM 漏改 |
+| `_db_spec/_api_spec/_ui_spec/_js_spec` | 235-330 | 四个工程师的岗位说明书，按契约动态渲染（连"sqlite 游标返回 tuple 不能直接 dict(row)"的坑都写进去了） |
+| `LEADS` | 334 | 3 个组长 × 8 成员的组织结构（id/提示词/工具/产出文件） |
+| `DeliveryState` | 384 | 图状态：topic/contract/leads_done/final |
+| `_run_worker(...)` | 442 | 按 kind 分派：coder 写文件 / review 审查 / functional 测试 / perf 压测 |
+| `_make_lead_node(L)` | 628 | 组长节点闭包：并行派活 → 自检 → 打回重写≤2 次 → LLM 小结 |
+| `cto_synthesize(state)` | 705 | CTO 验收（acceptance_check）+ 综合交付总结 |
+| `_build_graph()` | 756 | StateGraph 手搭：START→前端→后端→测试→CTO→END |
+| `run_events(...)` | 811 | 对外入口：先定契约再跑图，返回 {final, contract} |
 
-**要点**：① `code_model`（temperature=0.1）写代码定契约，`prose_model`（0.5）写总结——低温求稳可编译，高温求语言自然；② `_llm_or_fallback` 让汇总/审查类文本可降级——代码已产出、测试已过时，不被临时网络错误打断整轮；③ 测试组专属"测试驱动返工"分支（~426-439）：功能测试失败 → 带堆栈跨组打回后端重写 → 重测一次，这是静态编译查不出的实现级 bug（如 `dict(tuple)`）的最终防线；④ 文件末尾有 `__main__` 自测入口（"待办清单"需求全链验证）。
+**要点**：① `code_model`（temperature=0.1）写代码定契约，`prose_model`（0.5）写总结——低温求稳可编译，高温求语言自然；② `_llm_or_fallback` 让汇总/审查类文本可降级——代码已产出、测试已过时，不被临时网络错误打断整轮；③ 测试组专属"测试驱动返工"分支（~652-661）：功能测试失败 → 带堆栈跨组打回后端重写 → 重测一次，这是静态编译查不出的实现级 bug（如 `dict(tuple)`）的最终防线；④ 文件末尾有 `__main__` 自测入口（"待办清单"需求全链验证）。
+
+### 5.9 `frontend-new/`（约 2760 行 · 约 40 分钟 · 前端支线，未加注释）
+
+- **作用**：新版交付控制台——会话管理、组织树动画、逐步回放、产物/质量检查器、iframe 预览。技术栈 React 18 + Vite 5 + TypeScript + Tailwind CSS。
+- **与后端的关系**：dev 模式跑在 5173 端口，`vite.config.ts` 把 `/api` 代理到 8090；`lib/types.ts` 是后端 JSON 结构的 TypeScript 镜像（17 种 `RunEvent` 判别联合与 `server.py` producer 的 emit 点一一对应）。
+- **阅读顺序建议**：`main.tsx`（1 分钟）→ `App.tsx`（入口编排，10 分钟）→ `lib/types.ts` + `lib/api.ts`（数据契约与 SSE 客户端，8 分钟）→ `hooks/useRunFeed.ts`（全局状态机，8 分钟）→ `lib/org.ts` + `lib/steps.tsx`（回放核心逻辑，8 分钟）→ `components/` 按需查阅。
+
+**关键文件**：
+
+| 文件 | 行数(~) | 作用 |
+|---|---|---|
+| `src/App.tsx` | 260 | 入口编排：健康检查轮询（离线 10s 重试）、焦点派生数据（组织树快照/文件清单/测试事件/final）、750ms 自动播放、键盘步进（←/→ 步进、Esc 关弹层）、5 种弹窗状态机（agent/file/brief/preview/zoom）、Markdown 报告下载 |
+| `src/hooks/useRunFeed.ts` | 163 | 全局会话/交付流状态机：`send` 发起 SSE 并把事件边收边入栈、`openConversation` 装载历史并聚焦最后一轮最后一步、运行中锁定会话切换（防事件写进已离开的线程） |
+| `src/lib/types.ts` | 180 | 后端契约镜像：17 种 `RunEvent`（start/contract/file_written/review_result/test_result/final…）+ 全部 payload 接口 |
+| `src/lib/api.ts` | 110 | `fetch` 封装 + `openRunStream`：EventSource 订阅全部事件名，`final`/`error` 即关流、绝不自动重连（重连=整轮交付重跑） |
+| `src/lib/org.ts` | 76 | `computeOrgState`：按回放步号重放事件，得 CTO/组长/成员的 idle/live/done 快照；`actorLabel`/`eventLevel` 供时间线缩进 |
+| `src/lib/steps.tsx` | 198 | `stepMeta`：把每种事件翻译成"图标+色调+标题+详情"的单步摘要；`connLabel`：CTO 与组长连线上显示的当前动作文案 |
+| `src/lib/markdown.tsx` | 115 | 极简 Markdown 渲染（标题/列表/表格/行内），只支持后端总结实际出现的语法；React 文本节点天然转义、无 XSS 面 |
+| `src/lib/diff.tsx` + `format.ts` | 37 | unified diff 按行着色（新增绿/删除红/hunk 紫）；秒/字节/时间戳格式化 |
+| `components/OrgTree.tsx` | 151 | 组织树可视化：节点按 idle/live/done 着色、连线显示当前动作（组长 id → Phosphor 图标映射，后端 emoji 不直接上屏） |
+| `components/ConversationPanel.tsx` | 357 | 左栏：会话列表（新建/打开/删除/记忆提示）、输入框、每轮的时间线步进列表（按事件层级缩进）、下载报告 |
+| `components/StagePanel.tsx` + `ZoomOverlay.tsx` | 187 | 深色舞台 + 全屏回放层：组织树动画 + 播放/暂停/前后步/跳转控制条 |
+| `components/InspectorPanel.tsx`（含 `StepDetail`/`FilesTree`/`TestsCards`） | 512 | 右下检查器三 Tab：data（当前事件详情：提示词披露/diff/测试报告）、files（产物文件树）、tests（审查/功能/性能三类质量结论卡） |
+| `components/dialogs/dialogs.tsx`（含 `ui/Modal`/`ui/bits`） | 392 | 4 个弹窗（Agent 卡片：系统提示词+真实工具清单；文件 diff；交付计划；预览 iframe 启动/停止）+ Modal 弹窗壳（四档宽度）+ Chip/IconBtn/Panel 原子件 |
+
+**要点**：① 前端没有任何业务逻辑——它只是后端事件流的"可视化投影"，状态只有一个来源（`useRunFeed` 的 `turns`），其余全是派生数据；② "回放"是纯函数：任意步号 → 重放事件 → 组织树快照（`computeOrgState`），历史回放与实时动画复用同一机制；③ `openRunStream` 掐断 EventSource 默认重连是刻意的——`GET /api/run` 重连等于把整轮交付重跑一遍；④ 组件层不直接调 `fetch`，网络出口全部收拢在 `lib/api.ts` 一处。
 
 ---
 
@@ -359,12 +420,12 @@ while True:
 
 | 失败点 | 降级方案 | 代码位置 |
 |---|---|---|
-| 契约解析失败 | 回退 FALLBACK_CONTRACT | agent.py ~139 |
-| LLM 漏改契约 | 正则确定性修改兜底 | agent.py ~107 |
-| 汇总/审查 LLM 失败 | `fallback` 文本 + 降级说明 | agent.py ~297 |
-| pyflakes 未安装 | 只做 py_compile，不报错 | tools.py ~264 |
-| 功能测试失败 | 跨组打回重写再测 | agent.py ~426 |
-| 组长自检不过 | 打回重写（≤2 次） | agent.py ~444 |
+| 契约解析失败 | 回退 FALLBACK_CONTRACT | agent.py ~204 |
+| LLM 漏改契约 | 正则确定性修改兜底 | agent.py ~152 |
+| 汇总/审查 LLM 失败 | `fallback` 文本 + 降级说明 | agent.py ~426 |
+| pyflakes 未安装 | 只做 py_compile，不报错 | tools.py ~395 |
+| 功能测试失败 | 跨组打回重写再测 | agent.py ~652 |
+| 组长自检不过 | 打回重写（≤2 次） | agent.py ~670 |
 
 **意图**：整条链路上任何一个 LLM/环境环节抖动，交付流程都不会整体中断——要么降级继续，要么定向返工。
 
@@ -394,6 +455,7 @@ while True:
 |---|---|---|
 | Python | 3.12 | requirements.txt 注释推荐 3.12 |
 | pip 依赖 | 见 requirements.txt | langgraph 1.2.4 / langchain-openai 1.2.2 / fastapi 0.136.3 / uvicorn 0.49.0 / httpx / pyflakes / python-dotenv |
+| Node.js | ≥ 18 | 仅新版控制台 frontend-new 需要（Vite 5）；只用旧版 8090 页面可不装 |
 
 ```bash
 # ① 建虚拟环境并装依赖（Windows PowerShell 下激活命令为 .venv\Scripts\activate）
@@ -409,24 +471,41 @@ cp .env.example .env                            # Windows: copy .env.example .en
 
 ```bash
 .venv/bin/python -m uvicorn backend.app:app --host 127.0.0.1 --port 8090
-# 浏览器打开 http://127.0.0.1:8090
 ```
 
-### 8.3 体验核心链路
+### 8.3 打开控制台（二选一）
+
+**方式 A（推荐）：新版 React 控制台 `frontend-new/`**
+
+```bash
+cd frontend-new
+npm install        # 首次运行需要（Node ≥ 18）
+npm run dev        # Vite 开发服务器 → http://localhost:5173
+```
+
+浏览器打开 http://localhost:5173 —— `/api` 请求由 Vite 代理转发到 8090（`vite.config.ts`），SSE 流式端点原样透传，无需关心跨域。
+
+**方式 B：旧版零依赖单文件控制台**
+
+浏览器直接打开 http://127.0.0.1:8090 —— `app.py` 的 `/` 路由用 `FileResponse` 托管 `frontend/index.html`，不需要 Node。两个控制台共用同一套 `/api/*`，新版多了会话管理、逐步回放与全屏舞台。
+
+### 8.4 体验核心链路
 
 1. 页面输入需求（如"做一个待办清单：能添加任务（标题/优先级）、查看列表、删除任务"）→ 点开始
-2. 观察树状动画：技术总监定契约 → 三组长依次点亮 → 组内成员并行 → 工具调用/写文件/测试结果实时弹出
-3. 交付完成后读技术总监的 Markdown 总结 → 点「🚀 启动预览」在 iframe 里用真应用
-4. 追问一句"把标题改成『我的番茄钟』"→ 观察增量修改（workspace 播种 + 契约沿用）
+2. 观察组织树动画：技术总监定契约 → 三组长依次点亮 → 组内成员并行 → 工具调用/写文件/测试结果实时弹出
+3. 用 ←/→ 键逐步回放，点任意节点看系统提示词与工具定义，点写文件事件看 unified diff
+4. 交付完成后读技术总监的 Markdown 总结 → 点「🚀 启动预览」在 iframe 里用真应用
+5. 追问一句"把标题改成『我的番茄钟』"→ 观察增量修改（workspace 播种 + 契约沿用）
+6. 刷新页面后从会话列表重新打开 → 同一份数据完整回放（SQLite 事件流复现）
 
-### 8.4 自测（不开浏览器验证全链路）
+### 8.5 自测（不开浏览器验证全链路）
 
 ```bash
 .venv/bin/python -m backend.agent
 # 用"待办清单"需求跑一遍动态契约全链,终端打印全部事件与产物清单
 ```
 
-### 8.5 手动查数据
+### 8.6 手动查数据
 
 ```bash
 sqlite3 backend/data/runs.db "SELECT id, session, query FROM runs ORDER BY ts DESC;"
@@ -437,15 +516,16 @@ sqlite3 backend/data/runs.db "SELECT id, session, query FROM runs ORDER BY ts DE
 
 ## 9. 复刻建议与学习路线
 
-> 起点沿用 quick_start_files 的数据驱动结论：从 `backend/__init__.py`（入口，模块地图）开始，随后进入 `agent.py` 与 `app.py`。
+> 起点说明：骨架依赖分析当前抓到的主要是前端类型引用边，quick_start 给出 `frontend-new/src/App.tsx`（入口，入度 0）→ `lib/types.ts`（被 15 个文件引用）→ `lib/org.ts`。语义上这个项目的核心在后端，建议**先走后端主线（5.1→5.8），再走前端支线（5.9）**——两条线在"SSE 事件流"处会合。
 
 | 阶段 | 做什么 | 产出 | 耗时估计 |
 |---|---|---|---|
-| 阶段 1：跑通 | 装依赖、配 key、起服务、完整体验一次交付；`python -m backend.agent` 看事件流 | 直觉认知："分层图长什么样" | 0.5 天 |
+| 阶段 1：跑通 | 装依赖、配 key、起服务、用 frontend-new 控制台完整体验一次交付（见 8.3）；`python -m backend.agent` 看事件流 | 直觉认知："分层图长什么样" | 0.5 天 |
 | 阶段 2：读图 | 按 5.8 的行号顺序精读 agent.py，手画 StateGraph 的节点与边；对照 `_make_lead_node` 理解返工循环 | 一张手绘架构图 | 1 天 |
 | 阶段 3：读工具 | 精读 tools.py 的四个"真执行"工具；本地跑一次 `run_functional_test` 的子进程片段看 `___RESULT___` 协议 | 理解"真测试"如何防 LLM 糊弄 | 1 天 |
 | 阶段 4：读流式 | 精读 server.py 的 `/api/run`：contextvars 设置顺序、producer/consumer、多轮记忆拼装 | 能回答"为什么 FILES.set 要在 create_task 前" | 0.5 天 |
-| 阶段 5：动手改 | 小改：给契约加一个 `dark_mode` 字段并让 inspect_frontend 核对；中改：把测试驱动返工改成最多 2 次；大改：新增一个"运维组长"节点（部署检查） | 属于你自己的分层图 | 2-3 天 |
+| 阶段 5：读前端（可选支线） | 按 5.9 顺序读 frontend-new：App.tsx 编排 → types/api 契约 → useRunFeed 状态机 → org/steps 回放逻辑 | 能回答"回放为什么是纯函数""为什么禁用 EventSource 自动重连" | 1 天 |
+| 阶段 6：动手改 | 小改：给契约加一个 `dark_mode` 字段并让 inspect_frontend 核对；中改：把测试驱动返工改成最多 2 次；大改：新增一个"运维组长"节点（部署检查） | 属于你自己的分层图 | 2-3 天 |
 
 **学习资源**：
 
@@ -487,6 +567,9 @@ A：三重保险：① `_latest_build_context` 找到上一版契约与 run_id�
 **Q9：能看到每个 Agent 的系统提示词吗？**
 A：能。`GET /api/agents` 返回技术总监 + 3 组长 + 8 成员的角色、系统提示词与工具列表（coder 成员的 SPEC 用回退契约渲染作示例）；前端点节点即看。
 
+**Q10：为什么有两个前端（`frontend/` 和 `frontend-new/`）？**
+A：`frontend/index.html` 是零依赖单文件版——由 FastAPI 的 `/` 路由直接托管在 8090，克隆即用、无需 Node，适合最快跑起来；`frontend-new/` 是功能完整的 React 18 + Vite + TS + Tailwind 控制台（会话管理、逐步回放、全屏舞台、产物/质量检查器），dev 模式跑在 5173 并把 `/api` 代理到 8090。两者共用同一套 `/api/*`，后端不感知差异；前端事件结构由 `frontend-new/src/lib/types.ts` 与 `server.py` 的 producer 对齐。
+
 ---
 
 ## 附录：关键术语对照表
@@ -509,4 +592,4 @@ A：能。`GET /api/agents` 返回技术总监 + 3 组长 + 8 成员的角色、
 
 ---
 
-*本导读由 Code Explain Expert 生成 · 基于 2026-08 源码版本 · 全文 8 个源码文件约 1340 行*
+*本导读由 Code Explain Expert 生成 · 基于 2026-09 注释版源码（backend 8 文件约 2010 行，全部附逐行意图级注释；frontend-new 约 2760 行保持原味未注，导读见 5.9）*
